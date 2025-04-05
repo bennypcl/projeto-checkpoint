@@ -11,6 +11,12 @@ create table usuarios (
 select * from usuarios;
 desc usuarios;
 
+insert into usuarios (usu_cargo, usu_nome, usu_cpf) values
+('Gerente', 'Ana Costa', '12345678901'),
+('Vendedor(a)', 'Carlos Silva', '23456789012'),
+('Vendedor(a)', 'Juliana Souza', '34567890123'),
+('Vendedor(a)', 'Fernanda Rocha', '56789012345');
+
 -- TABELA DE CLIENTES: Armazena informações dos clientes.
 create table clientes (
 	cli_id int auto_increment primary key,
@@ -119,3 +125,16 @@ create table dinheiro (
 );
 select * from dinheiro;
 desc dinheiro;
+
+-- TABELA PARA TEMAS
+create table temas (
+    tema_id int auto_increment primary key,
+    tema_nome varchar(100) not null,
+    valor varchar(55)
+);
+select * from temas;
+desc temas;
+
+insert into temas (tema_nome, valor) values
+('united', 'escuro'),
+('solar', 'claro');
