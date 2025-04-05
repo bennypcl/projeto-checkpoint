@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 from tkinter import filedialog
 from tkinter import simpledialog
 
@@ -27,6 +28,7 @@ class TelaMenu:
         # Menu "Configurações"
         self.mnu_configuracao = tk.Menu(self.mnu_principal, tearoff=0)  # Cria submenu de configurações
         self.mnu_principal.add_cascade(label='Configurações', menu=self.mnu_configuracao)  # Adiciona ao menu principal
+        self.mnu_configuracao.add_command(label='Temas', command=self.mudar_tema) # Item do menu para edição de tema de vizualização
 
         self.tpl_menu.config(menu=self.mnu_principal)  # Aplica o menu na janela
 
@@ -96,3 +98,34 @@ class TelaMenu:
                 values = list(self.tvw_inventario.item(cedula_valor, "values"))  # Pega todos os valores da linha
                 values[5] = nv_cd_valor  # Substitui o valor da 6ª coluna pelo novo
                 self.tvw_inventario.item(cedula_valor, values=values)  # Atualiza os valores da linha no Treeview
+    
+    def mudar_tema(self):
+        print("alo")
+        self.tpl_temas = tk.Toplevel(self.janela)
+        self.tpl_temas.title('Alteração de Tema')
+        self.tpl_temas.grab_set()
+
+        self.temas = {
+            'Claro':'united',
+            'Escuro':'solar'} # Temas disponíveis
+
+        frm_temas = ttk.Frame(self.tpl_temas, padding=50) # Frame para agrupar componentes da janela de temas
+        frm_temas.pack(anchor='center')
+
+        lbl_tema = ttk.Label(frm_temas, text='Escolha o Tema:')
+        lbl_tema.pack(anchor='w')
+        self.cbx_tema = ttk.Combobox(frm_temas, values=list(self.temas.keys()))
+        self.cbx_tema.pack(anchor='w')
+
+        frm_botoes = ttk.Frame(frm_temas)
+        frm_botoes.pack(pady=5)
+
+        btn_cancelar = ttk.Button(frm_botoes, text='Cancelar', style=SECONDARY, command=self.tpl_temas.destroy)
+        btn_cancelar.grid(row=0, column=0, padx=2.5)
+        btn_concluir = ttk.Button(frm_botoes, text='Concluir', command=self.confirmar_mudanca_tema)
+        btn_concluir.grid(row=0, column=1, padx=2.5)
+
+    def confirmar_mudanca_tema(self):
+        tema_visivel = self.cbx_tema.get()
+        tema_real = self.temas[tema_visivel]
+        self.janela.style.theme_use(tema_real)
