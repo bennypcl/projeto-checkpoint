@@ -1,4 +1,4 @@
-![Logo](https://github.com/bennypcl/projeto-checkpoint/edit/documentation/imagens/Checkpoint_completo_sfundo.png)
+![Logo]([https://github.com/bennypcl/projeto-checkpoint/edit/documentation/imagens/Checkpoint_completo_sfundo.png](https://github.com/bennypcl/projeto-checkpoint/blob/documentation/imagens/Checkpoint_completo_sfundo.png?raw=true))
 
 # Projeto Checkpoint
 
