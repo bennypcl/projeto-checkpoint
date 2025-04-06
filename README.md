@@ -1,3 +1,4 @@
+![Image](https://github.com/user-attachments/assets/1d42fb37-ebaf-40ff-aa57-fdb88a158217)
 
 # Projeto Checkpoint
 
