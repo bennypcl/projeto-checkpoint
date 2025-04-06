@@ -3,6 +3,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter import filedialog
 from tkinter import simpledialog
+from tkinter import messagebox
 
 class TelaMenu:
     def __init__(self, janela):
@@ -12,7 +13,7 @@ class TelaMenu:
     def menu(self):
         # --- Esta parte permanece inalterada ---
         self.tpl_menu = tk.Toplevel(self.janela)
-        self.tpl_menu.geometry('1400x500')
+        self.tpl_menu.geometry('1400x800')
 
         self.mnu_principal = tk.Menu(self.tpl_menu)
 
@@ -67,7 +68,12 @@ class TelaMenu:
         self.tvw_inventario = ttk.Treeview(frm_treeview, columns=colunas, show="headings", height=15) # Altura inicial
 
         # Configuração da tag para destacar linhas "pdv"
-        self.tvw_inventario.tag_configure("sigla_afd", background="lightblue") # Cor vermelha clara
+        self.tvw_inventario.tag_configure("sigla_pdv", background="yellow") # Cor azul claro
+        self.tvw_inventario.tag_configure("zerado", background="lightgray") # Cor cinza claro 
+        self.tvw_inventario.tag_configure("negativado", background="gray") # Cor cinza 
+        self.tvw_inventario.tag_configure("diferente", background="red") # Cor vermelha para divergencias
+        self.tvw_inventario.tag_configure("igual", background="lightgreen") # Cor verde claro para valores iguais
+
 
         # Define os nomes e larguras (opcional) das colunas
         self.tvw_inventario.heading("col1", text="Nome")
@@ -103,21 +109,39 @@ class TelaMenu:
         frm_filtros = ttk.Frame(self.frm_principal_inventario)
         frm_filtros.pack(pady=10)
 
-        self.lbl_visual = ttk.Label(frm_filtros, text="Filtrar por tipo:")
-        self.lbl_visual.grid(row=0, column=0, padx=5, pady=5)
+        self.lbl_editar = ttk.Label(frm_filtros, text= "Editar:")
+        self.lbl_editar.grid(row=0, column=0, padx= 5, pady= 5, sticky=EW)
+
+        self.btn_add_produto = ttk.Button(frm_filtros, text="Adicionar Produto", command=self.adicionar_produto)
+        self.btn_add_produto.grid(row=0, column=1, padx=5, pady=5, sticky=EW)
+
+        self.lbl_visual = ttk.Label(frm_filtros, text="Análise por produto:")
+        self.lbl_visual.grid(row=1, column=0, padx=5, pady=5, sticky=EW)
 
         # Botões de Filtro - usam lambda para passar o critério para a função filtrar_treeview
         self.btn_todos = ttk.Button(frm_filtros, text="Mostrar Todos", command=lambda: self.filtrar_treeview(None)) # Botão para limpar filtro
-        self.btn_todos.grid(row=0, column=1, padx=5)
+        self.btn_todos.grid(row=2, column=1, padx=5, pady=3, sticky=EW)
 
-        self.btn_camisa = ttk.Button(frm_filtros, text="Capas", command=lambda: self.filtrar_treeview("Capa"))
-        self.btn_camisa.grid(row=0, column=2, padx=5)
+        self.btn_camisa = ttk.Button(frm_filtros, text="Camisetas", command=lambda: self.filtrar_treeview("Camisetas"))
+        self.btn_camisa.grid(row=2, column=2, padx=5, pady=3, sticky=EW)
+
+        self.btn_camisa = ttk.Button(frm_filtros, text="Mixes", command=lambda: self.filtrar_treeview("Mixes"))  
+        self.btn_camisa.grid(row=2, column=3, padx=5, pady=3, sticky=EW)
 
         self.btn_meia = ttk.Button(frm_filtros, text="Meia", command=lambda: self.filtrar_treeview("Meia"))
-        self.btn_meia.grid(row=0, column=3, padx=5)
+        self.btn_meia.grid(row=2, column=4, padx=5, pady=3, sticky=EW)
+
+        self.btn_camisa = ttk.Button(frm_filtros, text="Bonés", command=lambda: self.filtrar_treeview("Boné")) 
+        self.btn_camisa.grid(row=3, column=1, padx=5, pady=3, sticky=EW)
 
         self.btn_pdv = ttk.Button(frm_filtros, text="PDV", command=lambda: self.filtrar_treeview("pdv"))
-        self.btn_pdv.grid(row=0, column=4, padx=5)
+        self.btn_pdv.grid(row=3, column=2, padx=5, pady=3, sticky=EW)
+
+        self.btn_camisa = ttk.Button(frm_filtros, text="Negativados", command=lambda: self.filtrar_treeview("-")) 
+        self.btn_camisa.grid(row=3, column=3, padx=5, pady=3, sticky=EW)
+
+        self.btn_camisa = ttk.Button(frm_filtros, text="Zerados", command=lambda: self.filtrar_treeview("Zerado")) 
+        self.btn_camisa.grid(row=3, column=4, padx=5, pady=3, sticky=EW)
 
         # Atualiza a exibição inicial (caso já haja dados carregados anteriormente)
         self.filtrar_treeview(None)
@@ -136,6 +160,8 @@ class TelaMenu:
 
                 for linha in linhas:
                     dados = [campo.strip() for campo in linha.split(";")] # Remove espaços extras
+                    if dados[4] == "0":
+                        dados[4] = "Zerado"
                     if len(dados) >= 5:
                         while len(dados) < 6:
                             dados.append("") # Garante 6 colunas
@@ -145,8 +171,84 @@ class TelaMenu:
                 self.filtrar_treeview(None)
 
             except Exception as e:
-                tk.messagebox.showerror("Erro de Leitura", f"Não foi possível ler o arquivo:\n{e}")
+                messagebox.showerror("Erro de Leitura", f"Não foi possível ler o arquivo:\n{e}")
+    
+    def adicionar_produto(self):
+        """Coleta dados do usuário e adiciona uma nova linha ao inventário."""
 
+        # Nomes das colunas para pedir ao usuário (exceto Est.Real, que começa vazio)
+        colunas_nomes = ["Nome", "Categoria", "Tamanho/Capacidade", "Preço", "Estoque"]
+        nova_linha_dados = [] # Lista para guardar os dados inseridos
+
+        # Pede cada dado sequencialmente
+        for nome_coluna in colunas_nomes:
+            valor = simpledialog.askstring(
+                f"Novo Item - {nome_coluna}", # Título da caixa de diálogo
+                f"Digite o valor para '{nome_coluna}':",
+                parent=self.tpl_menu # Garante que o diálogo apareça sobre a janela correta
+            )
+
+            # Se o usuário clicar em Cancelar (valor será None)
+            if valor is None:
+                messagebox.showinfo("Cancelado", "Adição de novo item cancelada.", parent=self.tpl_menu)
+                return # Interrompe a função
+
+            # --- Validação Simples (Opcional, mas recomendada) ---
+            if nome_coluna in ["Preço", "Estoque"]:
+                try:
+                    # Para Estoque, tenta converter para int (permite negativos e zero)
+                    if nome_coluna == "Estoque":
+                         int_val = int(valor)
+                         # Se for 0, armazena como "Zerado" (consistente com sua lógica atual)
+                         if int_val == 0:
+                             valor = "Zerado"
+                         # Você pode querer manter negativos como string com "-"
+                         # ou converter para número e tratar na lógica de tag/filtro
+                         # Vamos manter como string por enquanto se não for zero
+                         elif int_val < 0:
+                              valor = str(int_val) # Garante que seja a string com "-"
+                         else:
+                              valor = str(int_val) # Garante que seja a string do número
+
+                    # Para Preço, tenta converter para float
+                    elif nome_coluna == "Preço":
+                        float(valor) # Apenas valida, armazena como string por simplicidade aqui
+
+                except ValueError:
+                    messagebox.showwarning("Entrada Inválida",
+                                           f"O valor '{valor}' não é válido para '{nome_coluna}'.\nPor favor, insira um número.",
+                                           parent=self.tpl_menu)
+                    # Poderia fazer um loop para pedir novamente, mas por simplicidade vamos cancelar
+                    return
+            # --- Fim da Validação ---
+
+            nova_linha_dados.append(valor.strip()) # Adiciona o valor (removendo espaços extras)
+
+        # Adiciona uma string vazia para a 6ª coluna (Est.Real)
+        nova_linha_dados.append("")
+
+        # Garante que temos exatamente 6 colunas
+        while len(nova_linha_dados) < 6:
+             nova_linha_dados.append("") # Preenche caso algo tenha faltado (improvável aqui)
+
+        # Adiciona a nova linha à lista de dados principal
+        self.dados_originais.append(nova_linha_dados)
+
+        # Atualiza/Refresca o Treeview para mostrar a lista completa (incluindo o novo item)
+        # Passar None garante que o novo item apareça, independentemente do filtro atual
+        self.filtrar_treeview(None)
+
+        # (Opcional) Seleciona e rola para a nova linha adicionada
+        try:
+            # Pega o ID do último item inserido
+            ultimo_item_id = self.tvw_inventario.get_children()[-1]
+            self.tvw_inventario.selection_set(ultimo_item_id) # Seleciona
+            self.tvw_inventario.focus(ultimo_item_id)       # Foca
+            self.tvw_inventario.see(ultimo_item_id)         # Garante que esteja visível
+        except IndexError:
+            pass # Ignora se o treeview estiver vazio ou o item não for encontrado
+
+        messagebox.showinfo("Sucesso", "Novo item adicionado com sucesso!", parent=self.tpl_menu)
 
     def filtrar_treeview(self, criterio=None):
         # Garante que o Treeview exista antes de tentar manipular
@@ -165,15 +267,30 @@ class TelaMenu:
             # Verifica se a linha atual contém "pdv" no nome (coluna 0) para aplicar a tag
             # Faz a verificação aqui para aplicar a tag mesmo quando não está filtrando por "pdv"
             if len(dados) > 0 and "pdv" in dados[0].lower():
-                 tags_aplicar = ("sigla_afd",)
+                tags_aplicar = ("sigla_pdv",)
+            if len(dados) > 4 and "zerado" in dados[4].lower():
+                tags_aplicar = ("zerado",)
+            if len(dados) > 4 and "-" in dados[4].lower():
+                tags_aplicar = ("negativado",)
+
 
             # Lógica de filtragem
             if criterio is None: # Mostrar todos
                 mostrar = True
-            elif criterio == "Capa" and len(dados) > 1 and criterio.lower() in dados[0].lower(): # Filtra por Categoria (coluna 1) - Case Insensitive
+            elif criterio == "Camisetas" and len(dados) > 1 and criterio.lower() in dados[0].lower(): # Filtra por Nome (coluna 0) - Case Insensitive
                 mostrar = True
-            elif criterio == "Meia" and len(dados) > 1 and criterio.lower() in dados[0].lower(): # Filtra por Categoria (coluna 1) - Case Insensitive
+            elif criterio == "Mixes" and len(dados) > 1 and criterio.lower() in dados[0].lower(): # Filtra por Nome (coluna 0) - Case Insensitive
                 mostrar = True
+            elif criterio == "Meia" and len(dados) > 1 and criterio.lower() in dados[0].lower(): # Filtra por Nome (coluna 0) - Case Insensitive
+                mostrar = True
+            elif criterio == "Boné" and len(dados) > 1 and criterio.lower() in dados[0].lower(): # Filtra por Nome (coluna 0) - Case Insensitive
+                mostrar = True
+            elif criterio == "-" and len(dados) > 4 and criterio.lower() in dados[4].lower(): # Filtra por Quantidade no estoque (coluna 4) - Case Insensitive
+                if len(dados) > 4 and criterio.lower() in dados[4].lower():
+                    mostrar = True
+            elif criterio == "Zerado" and len(dados) > 4 and criterio.lower() in dados[4].lower(): # Filtra por Quantidade no estoque (coluna 4) - Case Insensitive
+                if len(dados) > 4 and criterio.lower() in dados[4].lower():
+                    mostrar = True
             elif criterio == "pdv": # Filtra por Nome (coluna 0) - Case Insensitive
                 # A tag já foi definida acima, aqui só decidimos se mostramos a linha
                 if len(dados) > 0 and criterio.lower() in dados[0].lower():
@@ -186,50 +303,102 @@ class TelaMenu:
 
 
     def editar_celula(self, event):
-        # --- Esta função permanece inalterada ---
+        """
+        Permite editar o valor da 6ª coluna (Est.Real) com duplo clique
+        e aplica/atualiza as tags 'diferente' ou 'igual' APENAS nesta linha.
+        Preserva outras tags existentes na linha (como sigla_pdv, zerado, negativado).
+        """
         item_id = self.tvw_inventario.focus() # Pega o ID do item (linha) focado
         if not item_id: # Se nada estiver focado, não faz nada
             return
 
         coluna_id = self.tvw_inventario.identify_column(event.x) # Identifica a coluna clicada (ex: '#1', '#2'...)
 
-        # Verifica se o clique foi na coluna 6 ('#6')
+        # Verifica se o clique foi na coluna 6 ('#6' - Est.Real)
         if coluna_id == "#6":
-            valores_atuais = list(self.tvw_inventario.item(item_id, "values")) # Pega todos os valores da linha como lista
-            valor_atual_col6 = valores_atuais[5] # Pega o valor específico da 6ª coluna (índice 5)
+            try:
+                # --- 1. Ler Dados e Tags Atuais da Linha Clicada ---
+                valores_atuais = list(self.tvw_inventario.item(item_id, "values"))
+                # Garante que a lista tenha pelo menos 6 elementos
+                while len(valores_atuais) < 6:
+                     valores_atuais.append('')
+                valor_atual_col6 = valores_atuais[5] # Valor antes da edição
 
-            # Abre diálogo para obter o novo valor
-            novo_valor = simpledialog.askstring("Editar Estoque Real",
-                                                "Digite o novo valor:",
-                                                initialvalue=valor_atual_col6,
-                                                parent=self.tpl_menu) # Define a janela pai
+                tags_atuais = self.tvw_inventario.item(item_id, "tags") # Tags antes da edição
 
-            # Se o usuário inseriu um valor (não cancelou)
-            if novo_valor is not None:
-                valores_atuais[5] = novo_valor # Atualiza o valor na lista
-                self.tvw_inventario.item(item_id, values=valores_atuais) # Atualiza a linha no Treeview
+            except tk.TclError:
+                 # Ocorre se o item não existe mais no Treeview
+                 messagebox.showerror("Erro",
+                                      "Não foi possível ler os dados do item selecionado (pode ter sido excluído).",
+                                      parent=self.tpl_menu if hasattr(self, 'tpl_menu') else None)
+                 return
 
-                # --- Opcional: Atualizar self.dados_originais ---
-                # Para manter a consistência, seria bom atualizar a lista original também.
-                # Isso requer encontrar o item correspondente em self.dados_originais.
-                # Pode ser um pouco mais complexo se a ordem não for garantida ou se houver duplicatas.
-                # Uma forma simples (se a ordem for mantida e não houver exclusões diretas no treeview):
+            # --- 2. Obter Novo Valor do Usuário ---
+            novo_valor = simpledialog.askstring(
+                "Editar Estoque Real",
+                "Digite o novo valor:",
+                initialvalue=valor_atual_col6,
+                parent=self.tpl_menu if hasattr(self, 'tpl_menu') else None
+            )
+
+            # --- 3. Processar e Atualizar se um Novo Valor foi Inserido ---
+            if novo_valor is not None: # Verifica se o usuário não clicou em Cancelar
+                # a. Atualiza o valor na lista local 'valores_atuais'
+                valores_atuais[5] = novo_valor.strip() # Remove espaços extras
+
+                # b. Prepara a lista final de tags
+                tags_finais = []
+                # i. Preserva tags existentes que NÃO são 'diferente' ou 'igual'
+                for tag in tags_atuais:
+                    if tag not in ("diferente", "igual"):
+                        tags_finais.append(tag)
+
+                # ii. Compara Estoque (idx 4) com o NOVO Est.Real (idx 5)
+                estoque_val = str(valores_atuais[4]).strip()
+                est_real_val = str(valores_atuais[5]).strip() # Usa o valor já atualizado
+
+                # iii. Adiciona a tag de comparação apropriada ('diferente' ou 'igual')
+                if estoque_val != est_real_val:
+                    tags_finais.append("diferente")
+                else:
+                    # Aplica 'igual' sempre que baterem
+                    # (Assume que 'igual' foi configurada se um estilo visual for desejado)
+                    tags_finais.append("igual")
+
+                # c. Atualiza a linha no Treeview com os novos valores E as novas tags
                 try:
-                    index = self.tvw_inventario.index(item_id) # Pega o índice visual no Treeview *filtrado*
-                    # ATENÇÃO: Isso só funciona corretamente se o Treeview não estiver filtrado
-                    # ou se você tiver uma maneira de mapear o item_id de volta ao índice original.
-                    # Uma abordagem mais robusta seria buscar pelos dados únicos (ex: nome+categoria+tamanho)
-                    # em self.dados_originais.
-                    # Exemplo de busca (simplificado, assume nome é único na lista original):
-                    nome_item = valores_atuais[0]
-                    for i, original_data in enumerate(self.dados_originais):
-                         if original_data[0] == nome_item: # Encontra pelo nome (pode precisar de critério melhor)
-                             self.dados_originais[i][5] = novo_valor
-                             break # Para após encontrar
-                except Exception as e:
-                     print(f"Aviso: Não foi possível atualizar dados_originais - {e}")
-                     # Implementar lógica de mapeamento mais robusta se necessário
+                    self.tvw_inventario.item(item_id, values=tuple(valores_atuais), tags=tuple(tags_finais))
+                except tk.TclError:
+                    messagebox.showerror("Erro",
+                                         "Não foi possível atualizar o item na tabela (pode ter sido excluído).",
+                                         parent=self.tpl_menu if hasattr(self, 'tpl_menu') else None)
+                    return # Sai se não conseguiu atualizar a tabela
 
+                # d. Tenta atualizar a lista self.dados_originais (Lógica original)
+                try:
+                    # ATENÇÃO: A busca pelo nome (valores_atuais[0]) pode falhar se não for único.
+                    # Uma chave mais robusta seria ideal em um sistema complexo.
+                    nome_item = valores_atuais[0]
+                    indice_encontrado = -1 # Flag para saber se encontrou
+                    for i, original_data in enumerate(self.dados_originais):
+                        # Garante que a lista original tenha 6 colunas para acesso seguro
+                        while len(original_data) < 6:
+                            original_data.append('')
+
+                        if original_data[0] == nome_item: # Encontra pelo nome
+                            indice_encontrado = i
+                            break # Para após encontrar
+
+                    if indice_encontrado != -1:
+                         # Atualiza o valor correto (índice 5 - Est.Real) na lista original
+                         self.dados_originais[indice_encontrado][5] = valores_atuais[5]
+                         # print(f"Debug: Dados originais atualizados no índice {indice_encontrado}") # Linha de depuração
+                    else:
+                         print(f"Aviso: Item com nome '{nome_item}' não encontrado em dados_originais para atualização.")
+
+                except Exception as e:
+                    # Captura exceções mais gerais durante a atualização dos dados originais
+                    print(f"Aviso: Não foi possível atualizar dados_originais - {e}")
 
     def mudar_tema(self):
         # --- Esta função permanece inalterada ---
@@ -291,7 +460,7 @@ class TelaMenu:
                 # Tenta aplicar o tema à janela do menu também, se existir
                 if hasattr(self, 'tpl_menu') and self.tpl_menu.winfo_exists():
                      ttk.Style().theme_use(tema_real) # Reaplicar globalmente pode ser necessário
-                self.tpl_temas.destroy() # Fecha a janela de seleção
+                # self.tpl_temas.destroy() # Fecha a janela de seleção
             except tk.TclError:
                  tk.messagebox.showwarning("Erro de Tema", f"Não foi possível aplicar o tema '{tema_real}'. Pode não estar instalado.")
         else:
