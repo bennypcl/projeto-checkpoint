@@ -20,7 +20,7 @@ class Tela: #iniciando a classe.
         self.lbl_user.grid(row=0, column=0, columnspan=2, sticky="w") # posicionando a label
         self.user_ent = tk.Entry(self.log) # iniciando a entrada para receber a senha
         self.user_ent.grid(row=1, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW') # posicionando essa entrada
-        # TODOS OS COMPONENTES DAQUI PRA FENTE SEGUEM ESSE PADRÃO. CASO ALGO MUDE, EU COMENTO NA HORA.
+        # TODOS OS COMPONENTES DAQUI PRA FRENTE SEGUEM ESSE PADRÃO. CASO ALGO MUDE, EU COMENTO NA HORA.
 
         self.lbl_senha = ttk.Label(self.log, text = 'Senha:', font = ("Arial", 14))
         self.lbl_senha.grid(row=2, column=0, sticky="w")

@@ -3,12 +3,14 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter import messagebox, simpledialog
 import re
+from tela_principal import TelaMenu
 
 
-#ajeitar o pós limpar pagamentos
 #colocar um botão de voltar no pdv
 #melhorar a exibição do resumo da venda
 #scrollbar || aumentar tamanho da tela
+
+#CORRIGIR CHAMADA DA TELA PRINCIPAL NO COISO DO VENDEDOR
 
 
 class TelaPontoVenda:
@@ -20,7 +22,7 @@ class TelaPontoVenda:
         self.total_compra = 0.0
         self.valor_restante = 0.0
         self.pagamentos = []
-        self.vendedores = ["Andressa", "Bruno", "Camila"]
+        self.vendedores = ["Andressa", "Nízia", "Vitória"]
         self.bandeiras = ["Visa", "MasterCard", "Elo", "Amex"]
 
         self.frame_atual = None
@@ -40,13 +42,23 @@ class TelaPontoVenda:
 
         self.limpar_frame()
         self.frame_atual = ttk.Frame(self.janela)
-        self.frame_atual.pack(padx=20, pady=20)
+        self.frame_atual.pack(fill="both", expand=True)
 
-        ttk.Label(self.frame_atual, text="Selecione o Vendedor", font=("Arial", 16)).pack(pady=10)
-        self.cmb_vendedor = ttk.Combobox(self.frame_atual, values=self.vendedores, state="readonly")
-        self.cmb_vendedor.pack(pady=10)
+        # Container central dentro do frame
+        container = ttk.Frame(self.frame_atual)
+        container.grid(row=0, column=0)
+        self.frame_atual.columnconfigure(0, weight=1)
+        self.frame_atual.rowconfigure(0, weight=1)
 
-        ttk.Button(self.frame_atual, text="Avançar", command=self.validar_vendedor).pack(pady=10)
+        # Conteúdo centralizado
+        ttk.Label(container, text="Selecione o Vendedor", font=("Arial", 16)).grid(row=0, column=0, columnspan=2, pady=(0, 10))
+
+        self.cmb_vendedor = ttk.Combobox(container, values=self.vendedores, state="readonly")
+        self.cmb_vendedor.grid(row=1, column=0, columnspan=2, pady=10)
+
+        ttk.Button(container, text="Voltar para o Início", command=self.tela_principal.menu).grid(row=2, column=0, padx=5, pady=10)
+        ttk.Button(container, text="Avançar", command=self.validar_vendedor).grid(row=2, column=1, padx=5, pady=10)
+
 
     def validar_vendedor(self):
         if not self.cmb_vendedor.get():
@@ -60,27 +72,35 @@ class TelaPontoVenda:
         self.frame_atual = ttk.Frame(self.janela)
         self.frame_atual.pack(padx=20, pady=20)
 
-        ttk.Label(self.frame_atual, text="Cadastro do Cliente", font=("Arial", 16)).pack(pady=10)
+        ttk.Label(self.frame_atual, text="Cadastro do Cliente", font=("Arial", 16)).grid(row=0, column=0, columnspan=2, pady=10)
 
+        self.label_cpf = ttk.Label(self.frame_atual, text="CPF:")
+        self.label_cpf.grid(row=1, column=0, padx=(0, 10), pady=5, sticky="e")
         self.entry_cpf = ttk.Entry(self.frame_atual)
-        self.entry_cpf.insert(0, "CPF")
-        self.entry_cpf.pack(pady=5)
+        self.entry_cpf.grid(row=1, column=1, pady=5, sticky="w")
         self.entry_cpf.bind("<FocusOut>", self.validar_campos_cliente)
 
+        self.label_nome = ttk.Label(self.frame_atual, text="Nome:")
+        self.label_nome.grid(row=2, column=0, padx=(0, 10), pady=5, sticky="e")
         self.entry_nome = ttk.Entry(self.frame_atual)
-        self.entry_nome.insert(0, "Nome")
-        self.entry_nome.pack(pady=5)
+        self.entry_nome.grid(row=2, column=1, pady=5, sticky="w")
 
+        self.label_telefone = ttk.Label(self.frame_atual, text="Telefone:")
+        self.label_telefone.grid(row=3, column=0, padx=(0, 10), pady=5, sticky="e")
         self.entry_telefone = ttk.Entry(self.frame_atual)
-        self.entry_telefone.insert(0, "Telefone")
-        self.entry_telefone.pack(pady=5)
+        self.entry_telefone.grid(row=3, column=1, pady=5, sticky="w")
 
+        self.label_nascimento = ttk.Label(self.frame_atual, text="Data de Nascimento:")
+        self.label_nascimento.grid(row=4, column=0, padx=(0, 10), pady=5, sticky="e")
         self.entry_nascimento = ttk.Entry(self.frame_atual)
-        self.entry_nascimento.insert(0, "Data de Nascimento")
-        self.entry_nascimento.pack(pady=5)
+        self.entry_nascimento.grid(row=4, column=1, pady=5, sticky="w")
 
-        ttk.Button(self.frame_atual, text="Voltar", command=self.tela_selecao_vendedor).pack(pady=10)
-        ttk.Button(self.frame_atual, text="Continuar", command=self.verificar_dados_cliente).pack(pady=10)
+        btn_voltar = ttk.Button(self.frame_atual, text="Voltar", command=self.tela_selecao_vendedor)
+        btn_voltar.grid(row=5, column=0, pady=10)
+
+        btn_continuar = ttk.Button(self.frame_atual, text="Continuar", command=self.verificar_dados_cliente)
+        btn_continuar.grid(row=5, column=1, pady=10)
+
 
     def validar_cpf(self, cpf):
         cpf = re.sub(r'\D', '', cpf)
@@ -104,7 +124,7 @@ class TelaPontoVenda:
                 self.entry_cpf.focus_set()
                 return False
             if not nome:
-                messagebox.showerror("Erro", "Nome é obrigatório quando o CPF é preenchido.")
+                messagebox.showerror("Erro", "Insira o nome.")
                 self.entry_nome.focus_set()
                 return False
         return True
@@ -135,8 +155,15 @@ class TelaPontoVenda:
         self.entry_produto.pack()
         self.entry_produto.insert(0, "Produto")
 
-        self.btn_adicionar = ttk.Button(container_esquerda, text="Adicionar", command=self.adicionar_produto)
-        self.btn_adicionar.pack(pady=5)
+        # Frame para os botões lado a lado
+        botoes_frame = ttk.Frame(container_esquerda)
+        botoes_frame.pack(pady=5)
+
+        self.btn_adicionar = ttk.Button(botoes_frame, text="Adicionar Produto", command=self.adicionar_produto)
+        self.btn_adicionar.pack(side="left", padx=5)
+
+        self.btn_remover = ttk.Button(botoes_frame, text="Remover Produto", command=self.remover_produto)
+        self.btn_remover.pack(side="left", padx=5)
 
         self.lista = tk.Listbox(container_esquerda, width=40)
         self.lista.pack(pady=10)
@@ -179,6 +206,14 @@ class TelaPontoVenda:
             self.lista.insert(tk.END, produto)
             self.total_compra += 10
             self.atualizar_total()
+    
+    def remover_produto(self):
+        selecionado = self.lista.curselection()
+        if selecionado:
+            self.lista.delete(selecionado[0])
+            self.total_compra -= 10
+            self.atualizar_total()
+
 
     def obter_valor_restante(self):
         try:
@@ -205,9 +240,11 @@ class TelaPontoVenda:
 
     def limpar_pagamentos(self):
         self.pagamentos = []
+        self.valor_restante = self.total_compra
         self.valor_editavel.delete(0, tk.END)
-        self.valor_editavel.insert(0, f"{self.total_compra:.2f}")
+        self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
         self.exibir_pagamentos()
+
 
     def pagamento_dinheiro(self):
         valor = self.obter_valor_restante()
@@ -259,11 +296,24 @@ class TelaPontoVenda:
             self.registrar_pagamento("Pix", valor)
 
     def finalizar_venda(self):
+        if self.total_compra <= 0 or self.lista.size() == 0:
+            messagebox.showwarning("Venda inválida", "Nenhum produto adicionado.")
+            return
+
         if self.obter_valor_restante() > 0:
             messagebox.showerror("Erro", "Ainda há valor pendente de pagamento.")
-        else:
-            self.itens_venda = self.lista.get(0, tk.END)  # Salva os itens da lista
-            self.tela_resumo_venda()
+            return
+
+        self.itens_venda = self.lista.get(0, tk.END)
+        
+        print("Venda registrada:", {
+            "itens": self.itens_venda,
+            "total": self.total_compra,
+            "pagamentos": self.pagamentos
+        })
+        
+        self.tela_resumo_venda()
+
 
     def tela_resumo_venda(self):
         self.limpar_frame()
