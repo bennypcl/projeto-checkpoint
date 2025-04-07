@@ -422,7 +422,7 @@ class TelaMenu:
             'Claro': 'united', # Exemplo de tema claro
             'Escuro': 'darkly', # Exemplo de tema escuro (solar é outra opção)
             'Cyborg': 'cyborg', # Outro escuro
-            'Vapor': 'vaporwave' # Outro tema
+            'Vapor': 'vapor' # Outro tema
          } # Temas disponíveis
 
         frm_temas = ttk.Frame(self.tpl_temas, padding=20) # Padding interno
