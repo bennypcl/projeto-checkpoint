@@ -23,7 +23,7 @@ class TelaMenu:
 
         self.mnu_pt_vendas = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Ponto de Venda', menu=self.mnu_pt_vendas)
-        self.mnu_pt_vendas.add_command(label='Nova Venda')
+        self.mnu_pt_vendas.add_command(label='Nova Venda', command=self.abrir_ponto_venda)
         self.mnu_pt_vendas.add_command(label='Ver Vendas')
 
         self.mnu_configuracao = tk.Menu(self.mnu_principal, tearoff=0)
@@ -40,6 +40,14 @@ class TelaMenu:
 
         # Chama a função para configurar a interface do inventário imediatamente
         self.interacao_inventario()
+
+    def abrir_ponto_venda(self):
+        from tela_ponto_venda import TelaPontoVenda
+        print("Abrindo PDV...")       # ajuda a testar se tá sendo chamado
+        for widget in self.janela.winfo_children():
+            widget.destroy()
+        TelaPontoVenda(self.janela)
+
 
     def interacao_inventario(self):
         # Limpa widgets anteriores *dentro* do frame principal do inventário, se já existirem
