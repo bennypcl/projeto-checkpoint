@@ -6,6 +6,7 @@ from tkinter import simpledialog
 from tkinter import messagebox
 from temas import GerenciadorTema
 from tela_ponto_venda import TelaPontoVenda
+from relatorio_pdf import gerar_relatorio_pdf
 
 class TelaMenu:
     def __init__(self, janela):
@@ -144,9 +145,25 @@ class TelaMenu:
         self.btn_copos = ttk.Button(frm_filtros_acoes, text="Copos", command=lambda: self.filtrar_treeview(("descricao", "Copo"))) # Assume 'Copo' na descrição
         self.btn_copos.grid(row=3, column=3, padx=5, pady=3, sticky=EW)
 
+        self.btn_tudocerto = ttk.Button(self.frm_principal_inventario, text="Gerar Relatório de Divergências", command=self.gerar_relatorio)
+        self.btn_tudocerto.pack()
+
         # Exibe o Treeview com dados atuais (se houver) ou vazio
         self.filtrar_treeview(None)
+    
+    # Exemplo de divergências
+    divergencias = [
+        {'produto': 'Caneta Azul', 'esperado': 100, 'contado': 80},
+        {'produto': 'Caderno A4', 'esperado': 50, 'contado': 53},
+    ]
 
+    def gerar_relatorio(self):
+        if not self.divergencias:
+            messagebox.showwarning("Aviso", "Nenhuma divergência encontrada.")
+            return
+
+        nome_arquivo = gerar_relatorio_pdf(self.divergencias)
+        messagebox.showinfo("Relatório gerado", f"Relatório salvo como:\n{nome_arquivo}")
 
     def upp_arquivo(self):
         """Abre um arquivo TXT, lê os dados e atualiza o Treeview."""
