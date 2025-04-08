@@ -4,14 +4,8 @@ from ttkbootstrap.constants import *
 from tkinter import filedialog
 from tkinter import simpledialog
 from tkinter import messagebox
-# Assume que 'temas.py' existe e contém a classe GerenciadorTema
-# from temas import GerenciadorTema # Descomente se necessário
-
-# Classe placeholder caso 'temas.py' não esteja disponível para teste
-class GerenciadorTema:
-    def __init__(self, janela):
-        self.janela = janela
-    # Adicione métodos se a classe original tiver mais funcionalidades usadas
+from temas import GerenciadorTema
+from tela_ponto_venda import TelaPontoVenda
 
 class TelaMenu:
     def __init__(self, janela):
@@ -22,6 +16,8 @@ class TelaMenu:
         self.dados_originais = []
         # Contador para gerar IDs únicos para novos itens adicionados manualmente
         self.novo_item_contador = 0
+        self.gerenciador_tema = GerenciadorTema(janela)
+        self.tela_venda = TelaPontoVenda(janela)
 
         # --- NÃO HÁ MAIS CONFIGURAÇÃO DE BANCO DE DADOS ---
 
@@ -43,11 +39,11 @@ class TelaMenu:
 
         self.mnu_pt_vendas = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Ponto de Venda', menu=self.mnu_pt_vendas)
-        self.mnu_pt_vendas.add_command(label='Nova Venda', command=self.abrir_ponto_venda)
+        self.mnu_pt_vendas.add_command(label='Nova Venda', command=self.tela_venda.tela_selecao_vendedor)
 
         self.mnu_configuracao = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Configurações', menu=self.mnu_configuracao)
-        self.mnu_configuracao.add_command(label='Temas', command=self.mudar_tema)
+        self.mnu_configuracao.add_command(label='Temas', command=self.gerenciador_tema.mudar_tema)
 
         self.tpl_menu.config(menu=self.mnu_principal)
 
@@ -57,16 +53,6 @@ class TelaMenu:
 
         # Chama a configuração da interface do inventário ao abrir o menu
         self.interacao_inventario()
-
-    def abrir_ponto_venda(self):
-        # Função placeholder para abrir o ponto de venda
-        try:
-            print("Abrindo PDV (funcionalidade a ser implementada/conectada)...")
-            messagebox.showinfo("Em Construção", "A funcionalidade Ponto de Venda ainda não está conectada nesta versão.", parent=self.tpl_menu)
-        except ImportError:
-            messagebox.showerror("Erro", "Não foi possível encontrar o módulo 'tela_ponto_venda'.", parent=self.tpl_menu)
-        except Exception as e:
-            messagebox.showerror("Erro", f"Não foi possível abrir o Ponto de Venda:\n{e}", parent=self.tpl_menu)
 
     def interacao_inventario(self):
         """Configura a interface do inventário (focada em TXT)."""
@@ -422,51 +408,3 @@ class TelaMenu:
                 messagebox.showerror("Erro de Interface", f"Não foi possível ler/atualizar dados do item:\n{e}", parent=self.tpl_menu)
             except Exception as e:
                 messagebox.showerror("Erro Inesperado", f"Ocorreu um erro na edição:\n{e}", parent=self.tpl_menu)
-
-    # --- Funções de Tema (mudar_tema, confirmar_mudanca_tema) ---
-    def mudar_tema(self):
-        self.tpl_temas = tk.Toplevel(self.janela)
-        self.tpl_temas.title('Alteração de Tema')
-        self.tpl_temas.geometry("300x200")
-        self.tpl_temas.resizable(False, False)
-        self.tpl_temas.transient(self.janela)
-        self.tpl_temas.grab_set()
-
-        self.temas = {
-            'Claro': 'united', 'Escuro': 'darkly',
-            'Cyborg': 'cyborg', 'Vapor': 'vapor'
-        }
-
-        frm_temas = ttk.Frame(self.tpl_temas, padding=20)
-        frm_temas.pack(expand=True, fill=BOTH)
-        lbl_tema = ttk.Label(frm_temas, text='Escolha o Tema:')
-        lbl_tema.pack(pady=(0, 5))
-        self.cbx_tema = ttk.Combobox(frm_temas, values=list(self.temas.keys()), state='readonly')
-        try:
-            tema_atual_real = ttk.Style().theme_use()
-            tema_selecionado = False
-            for nome_visivel, nome_real in self.temas.items():
-                if nome_real == tema_atual_real:
-                    self.cbx_tema.set(nome_visivel); tema_selecionado = True; break
-            if not tema_selecionado: self.cbx_tema.current(0)
-        except Exception: self.cbx_tema.current(0)
-        self.cbx_tema.pack(fill=X, pady=5)
-        frm_botoes = ttk.Frame(frm_temas)
-        frm_botoes.pack(side=BOTTOM, fill=X, pady=(10, 0))
-        btn_concluir = ttk.Button(frm_botoes, text='Aplicar', command=self.confirmar_mudanca_tema, bootstyle=SUCCESS)
-        btn_concluir.pack(side=RIGHT, padx=5)
-        btn_cancelar = ttk.Button(frm_botoes, text='Cancelar', command=self.tpl_temas.destroy, bootstyle=SECONDARY)
-        btn_cancelar.pack(side=RIGHT, padx=5)
-
-    def confirmar_mudanca_tema(self):
-        tema_visivel = self.cbx_tema.get()
-        if tema_visivel in self.temas:
-            tema_real = self.temas[tema_visivel]
-            try:
-                ttk.Style().theme_use(tema_real)
-                self.tpl_temas.destroy()
-                print(f"DEBUG: Tema alterado para '{tema_real}'.")
-            except tk.TclError as e:
-                messagebox.showwarning("Erro de Tema", f"Não foi possível aplicar o tema '{tema_real}'.\nDetalhe: {e}", parent=self.tpl_temas)
-        else:
-            messagebox.showwarning("Seleção Inválida", "Selecione um tema válido.", parent=self.tpl_temas)

@@ -3,7 +3,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter import messagebox, simpledialog
 import re
-from tela_principal import TelaMenu
+#from tela_principal import TelaMenu
 
 
 #colocar um botão de voltar no pdv
@@ -188,6 +188,10 @@ class TelaPontoVenda:
         self.pagamentos_label = ttk.Label(container_direita, text="Pagamentos:")
         self.pagamentos_label.pack(pady=10)
 
+        self.label_troco = ttk.Label(container_direita, text="", foreground="green", font=("Arial", 10, "bold"))
+        self.label_troco.pack(pady=(10, 0))
+
+
         self.btn_finalizar = ttk.Button(container_direita, text="Finalizar Venda", command=self.finalizar_venda)
         self.btn_finalizar.pack(pady=20)
 
@@ -245,11 +249,32 @@ class TelaPontoVenda:
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
         self.exibir_pagamentos()
 
+    def calcular_troco(self, valor_pago, valor_restante):
+        troco = valor_pago - valor_restante
+        if troco > 0:
+            self.label_troco.config(text=f"Troco: R$ {troco:.2f}")
+        else:
+            self.label_troco.config(text="")
+
 
     def pagamento_dinheiro(self):
-        valor = self.obter_valor_restante()
-        if valor > 0:
-            self.registrar_pagamento("Dinheiro", valor)
+        valor_str = self.valor_editavel.get()
+
+        try:
+            valor_pago = float(valor_str.replace(",", "."))
+        except ValueError:
+            messagebox.showerror("Erro", "Digite um valor numérico válido.")
+            return
+
+        if valor_pago <= 0:
+            messagebox.showerror("Erro", "Digite um valor maior que zero.")
+            return
+
+        valor_restante = self.obter_valor_restante()
+        self.calcular_troco(valor_pago, valor_restante)
+        self.registrar_pagamento("Dinheiro", valor_pago)
+        self.exibir_pagamentos()
+
 
     def pagamento_debito(self):
         top = tk.Toplevel(self.janela)
