@@ -56,7 +56,6 @@ class TelaPontoVenda:
         self.cmb_vendedor = ttk.Combobox(container, values=self.vendedores, state="readonly")
         self.cmb_vendedor.grid(row=1, column=0, columnspan=2, pady=10)
 
-        ttk.Button(container, text="Voltar para o Início", command=self.tela_principal.menu).grid(row=2, column=0, padx=5, pady=10)
         ttk.Button(container, text="Avançar", command=self.validar_vendedor).grid(row=2, column=1, padx=5, pady=10)
 
 
@@ -213,6 +212,7 @@ class TelaPontoVenda:
             self.lista.delete(selecionado[0])
             self.total_compra -= 10
             self.atualizar_total()
+            self.limpar_pagamentos()
 
 
     def obter_valor_restante(self):

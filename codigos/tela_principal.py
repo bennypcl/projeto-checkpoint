@@ -4,11 +4,14 @@ from ttkbootstrap.constants import *
 from tkinter import filedialog
 from tkinter import simpledialog
 from tkinter import messagebox
+from temas import GerenciadorTema
 
 class TelaMenu:
     def __init__(self, janela):
         self.janela = janela
         self.dados_originais = [] # Lista para armazenar todos os dados lidos do arquivo
+        self.gerenciador_tema = GerenciadorTema(self.janela)
+
 
     def menu(self):
         # --- Esta parte permanece inalterada ---
@@ -28,7 +31,7 @@ class TelaMenu:
 
         self.mnu_configuracao = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Configurações', menu=self.mnu_configuracao)
-        self.mnu_configuracao.add_command(label='Temas', command=self.mudar_tema)
+        self.mnu_configuracao.add_command(label='Temas', command=self.gerenciador_tema.mudar_tema)
 
         self.tpl_menu.config(menu=self.mnu_principal)
 
@@ -309,7 +312,6 @@ class TelaMenu:
             if mostrar:
                 self.tvw_inventario.insert("", "end", values=dados, tags=tags_aplicar)
 
-
     def editar_celula(self, event):
         """
         Permite editar o valor da 6ª coluna (Est.Real) com duplo clique
@@ -408,71 +410,6 @@ class TelaMenu:
                     # Captura exceções mais gerais durante a atualização dos dados originais
                     print(f"Aviso: Não foi possível atualizar dados_originais - {e}")
 
-    def mudar_tema(self):
-        # --- Esta função permanece inalterada ---
-        print("alo") # Mensagem de depuração
-        self.tpl_temas = tk.Toplevel(self.janela)
-        self.tpl_temas.title('Alteração de Tema')
-        self.tpl_temas.geometry("300x200") # Tamanho razoável
-        self.tpl_temas.resizable(False, False) # Impede redimensionamento
-        self.tpl_temas.transient(self.janela) # Mantém sobre a janela principal
-        self.tpl_temas.grab_set() # Impede interação com outras janelas
-
-        self.temas = {
-            'Claro': 'united', # Exemplo de tema claro
-            'Escuro': 'darkly', # Exemplo de tema escuro (solar é outra opção)
-            'Cyborg': 'cyborg', # Outro escuro
-            'Vapor': 'vapor' # Outro tema
-         } # Temas disponíveis
-
-        frm_temas = ttk.Frame(self.tpl_temas, padding=20) # Padding interno
-        frm_temas.pack(expand=True, fill=BOTH) # Ocupa todo o espaço da janela Toplevel
-
-        lbl_tema = ttk.Label(frm_temas, text='Escolha o Tema:')
-        lbl_tema.pack(pady=(0, 5)) # Espaço abaixo
-
-        # Usa state='readonly' para impedir digitação, forçando seleção
-        self.cbx_tema = ttk.Combobox(frm_temas, values=list(self.temas.keys()), state='readonly')
-        # Tenta pré-selecionar o tema atual
-        try:
-             tema_atual_real = self.janela.style.theme_use()
-             for nome, real in self.temas.items():
-                 if real == tema_atual_real:
-                     self.cbx_tema.set(nome)
-                     break
-             if not self.cbx_tema.get(): # Se não encontrou, seleciona o primeiro
-                 self.cbx_tema.current(0)
-        except:
-             self.cbx_tema.current(0) # Seleciona o primeiro em caso de erro
-
-        self.cbx_tema.pack(fill=X, pady=5) # Ocupa largura, espaço vertical
-
-        frm_botoes = ttk.Frame(frm_temas)
-        # Centraliza os botões usando pack com side=LEFT/RIGHT e expand=True em um frame vazio no meio
-        frm_botoes.pack(side=BOTTOM, fill=X, pady=(10, 0)) # Cola na parte inferior
-
-        btn_concluir = ttk.Button(frm_botoes, text='Concluir', command=self.confirmar_mudanca_tema, bootstyle=SUCCESS)
-        btn_concluir.pack(side=RIGHT, padx=5)
-
-        btn_cancelar = ttk.Button(frm_botoes, text='Cancelar', command=self.tpl_temas.destroy, bootstyle=SECONDARY)
-        btn_cancelar.pack(side=RIGHT, padx=5)
-
-
-    def confirmar_mudanca_tema(self):
-        # --- Esta função permanece inalterada ---
-        tema_visivel = self.cbx_tema.get()
-        if tema_visivel in self.temas:
-            tema_real = self.temas[tema_visivel]
-            try:
-                self.janela.style.theme_use(tema_real)
-                # Tenta aplicar o tema à janela do menu também, se existir
-                if hasattr(self, 'tpl_menu') and self.tpl_menu.winfo_exists():
-                     ttk.Style().theme_use(tema_real) # Reaplicar globalmente pode ser necessário
-                # self.tpl_temas.destroy() # Fecha a janela de seleção
-            except tk.TclError:
-                 tk.messagebox.showwarning("Erro de Tema", f"Não foi possível aplicar o tema '{tema_real}'. Pode não estar instalado.")
-        else:
-             tk.messagebox.showwarning("Seleção Inválida", "Por favor, selecione um tema válido.")
 
 
 # # Código para iniciar a aplicação (exemplo)
