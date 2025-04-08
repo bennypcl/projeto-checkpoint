@@ -6,9 +6,8 @@ import re
 #from tela_principal import TelaMenu
 
 
-#colocar um botão de voltar no pdv
-#melhorar a exibição do resumo da venda
-#scrollbar || aumentar tamanho da tela
+#melhorar a exibição do resumo da venda; Da pra deixar pra dps
+#scrollbar || aumentar tamanho da tela; GUSTAVO: aumentei. ve se é o bastante
 
 #CORRIGIR CHAMADA DA TELA PRINCIPAL NO COISO DO VENDEDOR
 
@@ -38,7 +37,7 @@ class TelaPontoVenda:
         if self.janela_pdv is None or not tk.Toplevel.winfo_exists(self.janela_pdv):
             self.janela_pdv = tk.Toplevel(self.master)
             self.janela_pdv.title("Ponto de Venda")
-            self.janela_pdv.geometry("800x600") # Definindo um tamanho inicial para a janela do PDV
+            self.janela_pdv.geometry("800x800") # Definindo um tamanho inicial para a janela do PDV
             self.tela_selecao_vendedor()
         else:
             self.janela_pdv.lift() # Se já existir, traz para frente
@@ -88,7 +87,7 @@ class TelaPontoVenda:
         self.label_cpf.grid(row=1, column=0, padx=(0, 10), pady=5, sticky="e")
         self.entry_cpf = ttk.Entry(self.frame_atual)
         self.entry_cpf.grid(row=1, column=1, pady=5, sticky="w")
-        self.entry_cpf.bind("<FocusOut>", self.validar_campos_cliente)
+        #self.entry_cpf.bind("<FocusOut>", self.validar_cpf)
 
         self.label_nome = ttk.Label(self.frame_atual, text="Nome:")
         self.label_nome.grid(row=2, column=0, padx=(0, 10), pady=5, sticky="e")
@@ -113,13 +112,24 @@ class TelaPontoVenda:
 
 
     def validar_cpf(self, cpf):
-        cpf = re.sub(r'\D', '', cpf)
+        cpf = re.sub(r'\D', '', cpf)  # remove tudo que não for número
+
         if len(cpf) != 11 or cpf == cpf[0] * 11:
             return False
+
+        # Calcula o primeiro dígito verificador
         soma1 = sum(int(cpf[i]) * (10 - i) for i in range(9))
-        dig1 = (soma1 * 10 % 11) % 10
+        dig1 = 11 - (soma1 % 11)
+        if dig1 >= 10:
+            dig1 = 0
+
+        # Calcula o segundo dígito verificador
         soma2 = sum(int(cpf[i]) * (11 - i) for i in range(10))
-        dig2 = (soma2 * 10 % 11) % 10
+        dig2 = 11 - (soma2 % 11)
+        if dig2 >= 10:
+            dig2 = 0
+
+        # Verifica se os dígitos conferem
         return cpf[-2:] == f"{dig1}{dig2}"
 
     def validar_campos_cliente(self, event=None):
@@ -241,10 +251,19 @@ class TelaPontoVenda:
         self.exibir_pagamentos()
 
         self.valor_restante -= valor
-        self.valor_restante = max(self.valor_restante, 0.0)
 
+        # Se o cliente pagou mais do que o necessário, calcula troco
+        if self.valor_restante < 0:
+            troco = abs(self.valor_restante)
+            self.label_troco.config(text=f"Troco: R$ {troco:.2f}")
+            self.valor_restante = 0.0  # Zeramos para não ficar negativo
+        else:
+            self.label_troco.config(text="")
+
+        # Atualiza o campo com o novo valor restante (ou zero)
         self.valor_editavel.delete(0, tk.END)
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
+
 
 
     def exibir_pagamentos(self):
@@ -281,9 +300,8 @@ class TelaPontoVenda:
             messagebox.showerror("Erro", "Digite um valor maior que zero.")
             return
 
-        valor_restante = self.obter_valor_restante()
-        self.calcular_troco(valor_pago, valor_restante)
         self.registrar_pagamento("Dinheiro", valor_pago)
+
         self.exibir_pagamentos()
 
 
@@ -353,7 +371,7 @@ class TelaPontoVenda:
 
     def tela_resumo_venda(self):
         self.limpar_frame()
-        self.frame_atual = ttk.Frame(self.janela_pdv) # Usar self.janela_pdv
+        self.frame_atual = ttk.Frame(self.janela_pdv)
         self.frame_atual.pack(padx=20, pady=20, fill=BOTH, expand=True)
 
         ttk.Label(self.frame_atual, text="Resumo da Venda", font=("Arial", 16)).pack(pady=10)
@@ -362,19 +380,37 @@ class TelaPontoVenda:
         ttk.Label(self.frame_atual, text=f"Cliente: {self.dados_cliente.get('nome', '---')}").pack(pady=2, anchor="w")
         ttk.Label(self.frame_atual, text=f"CPF: {self.dados_cliente.get('cpf', '---')}").pack(pady=2, anchor="w")
 
+        # Produtos
         ttk.Label(self.frame_atual, text="Produtos:", font=("Arial", 12, "bold")).pack(pady=5, anchor="w")
         produtos_list = tk.Listbox(self.frame_atual, height=5)
         produtos_list.pack()
         for p in self.itens_venda:
             produtos_list.insert(tk.END, p)
 
+        # Pagamentos
         ttk.Label(self.frame_atual, text="Pagamentos:", font=("Arial", 12, "bold")).pack(pady=5, anchor="w")
         pagamentos_list = tk.Listbox(self.frame_atual, height=5)
         pagamentos_list.pack()
+        total_pago = 0
+        pagou_em_dinheiro = False
+
         for forma, valor in self.pagamentos:
             pagamentos_list.insert(tk.END, f"{forma}: R$ {valor:.2f}")
+            total_pago += valor
+            if "dinheiro" in forma.lower():
+                pagou_em_dinheiro = True
 
-        ttk.Label(self.frame_atual, text=f"Total Pago: R$ {self.total_compra:.2f}", font=("Arial", 12, "bold")).pack(pady=10, anchor="w")
+        # Valor total da compra
+        ttk.Label(self.frame_atual, text=f"Total da Compra: R$ {self.total_compra:.2f}", font=("Arial", 12, "bold")).pack(pady=(10, 0), anchor="w")
 
-        ttk.Button(self.frame_atual, text="Nova Venda", command=self.iniciar_pdv).pack(pady=10) # Para iniciar uma nova venda, abre outra janela de PDV ou reinicia a atual
-        ttk.Button(self.frame_atual, text="Fechar PDV", command=self.janela_pdv.destroy).pack(pady=5) # Adicionado botão para fechar apenas o PDV
+        # Valor total pago
+        ttk.Label(self.frame_atual, text=f"Total Pago: R$ {total_pago:.2f}", font=("Arial", 12)).pack(pady=(2, 0), anchor="w")
+
+        # Mostrar troco se pagou em dinheiro e passou do valor
+        if pagou_em_dinheiro and total_pago > self.total_compra:
+            troco = total_pago - self.total_compra
+            ttk.Label(self.frame_atual, text=f"Troco: R$ {troco:.2f}", font=("Arial", 12, "bold"), foreground="green").pack(pady=(5, 0), anchor="w")
+
+        # Botões finais
+        ttk.Button(self.frame_atual, text="Nova Venda", command=self.iniciar_pdv).pack(pady=10)
+        ttk.Button(self.frame_atual, text="Fechar PDV", command=self.janela_pdv.destroy).pack(pady=5)
