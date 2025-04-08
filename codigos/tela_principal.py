@@ -40,7 +40,7 @@ class TelaMenu:
 
         self.mnu_pt_vendas = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Ponto de Venda', menu=self.mnu_pt_vendas)
-        self.mnu_pt_vendas.add_command(label='Nova Venda', command=self.tela_venda.tela_selecao_vendedor)
+        self.mnu_pt_vendas.add_command(label='Nova Venda', command=self.tela_venda.iniciar_pdv)
 
         self.mnu_configuracao = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Configurações', menu=self.mnu_configuracao)

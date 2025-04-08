@@ -14,8 +14,9 @@ import re
 
 
 class TelaPontoVenda:
-    def __init__(self, janela):
-        self.janela = janela
+    def __init__(self, master):
+        self.master = master # Recebe a janela principal como master
+        self.janela_pdv = None # Janela Toplevel para o PDV
         self.vendedor_selecionado = None
         self.dados_cliente = {}
         self.produtos = []
@@ -26,11 +27,21 @@ class TelaPontoVenda:
         self.bandeiras = ["Visa", "MasterCard", "Elo", "Amex"]
 
         self.frame_atual = None
-        self.tela_selecao_vendedor()
+        # self.tela_selecao_vendedor() # Não chamar diretamente na inicialização
 
     def limpar_frame(self):
         if self.frame_atual:
             self.frame_atual.destroy()
+
+    def iniciar_pdv(self):
+        """Cria a janela Toplevel para o ponto de venda e inicia o fluxo."""
+        if self.janela_pdv is None or not tk.Toplevel.winfo_exists(self.janela_pdv):
+            self.janela_pdv = tk.Toplevel(self.master)
+            self.janela_pdv.title("Ponto de Venda")
+            self.janela_pdv.geometry("800x600") # Definindo um tamanho inicial para a janela do PDV
+            self.tela_selecao_vendedor()
+        else:
+            self.janela_pdv.lift() # Se já existir, traz para frente
 
     def tela_selecao_vendedor(self):
         self.vendedor_selecionado = None
@@ -41,12 +52,12 @@ class TelaPontoVenda:
         self.pagamentos = []
 
         self.limpar_frame()
-        self.frame_atual = ttk.Frame(self.janela)
+        self.frame_atual = ttk.Frame(self.janela_pdv) # Usar self.janela_pdv
         self.frame_atual.pack(fill="both", expand=True)
 
         # Container central dentro do frame
         container = ttk.Frame(self.frame_atual)
-        container.grid(row=0, column=0)
+        container.grid(row=0, column=0, padx=50, pady=50)
         self.frame_atual.columnconfigure(0, weight=1)
         self.frame_atual.rowconfigure(0, weight=1)
 
@@ -68,7 +79,7 @@ class TelaPontoVenda:
 
     def tela_cadastro_cliente(self):
         self.limpar_frame()
-        self.frame_atual = ttk.Frame(self.janela)
+        self.frame_atual = ttk.Frame(self.janela_pdv) # Usar self.janela_pdv
         self.frame_atual.pack(padx=20, pady=20)
 
         ttk.Label(self.frame_atual, text="Cadastro do Cliente", font=("Arial", 16)).grid(row=0, column=0, columnspan=2, pady=10)
@@ -141,7 +152,7 @@ class TelaPontoVenda:
 
     def tela_venda(self):
         self.limpar_frame()
-        self.frame_atual = ttk.Frame(self.janela)
+        self.frame_atual = ttk.Frame(self.janela_pdv) # Usar self.janela_pdv
         self.frame_atual.pack(fill=BOTH, expand=True)
 
         container_esquerda = ttk.Frame(self.frame_atual)
@@ -209,7 +220,7 @@ class TelaPontoVenda:
             self.lista.insert(tk.END, produto)
             self.total_compra += 10
             self.atualizar_total()
-    
+
     def remover_produto(self):
         selecionado = self.lista.curselection()
         if selecionado:
@@ -228,7 +239,7 @@ class TelaPontoVenda:
     def registrar_pagamento(self, forma, valor):
         self.pagamentos.append((forma, valor))
         self.exibir_pagamentos()
-        
+
         self.valor_restante -= valor
         self.valor_restante = max(self.valor_restante, 0.0)
 
@@ -277,7 +288,7 @@ class TelaPontoVenda:
 
 
     def pagamento_debito(self):
-        top = tk.Toplevel(self.janela)
+        top = tk.Toplevel(self.janela_pdv) # Usar self.janela_pdv
         top.title("Débito")
         ttk.Label(top, text="Selecione a bandeira:").pack(pady=5)
         cmb = ttk.Combobox(top, values=self.bandeiras, state="readonly")
@@ -294,7 +305,7 @@ class TelaPontoVenda:
         ttk.Button(top, text="Confirmar", command=confirmar).pack(pady=10)
 
     def pagamento_credito(self):
-        top = tk.Toplevel(self.janela)
+        top = tk.Toplevel(self.janela_pdv) # Usar self.janela_pdv
         top.title("Crédito")
         ttk.Label(top, text="Selecione a bandeira:").pack(pady=5)
         cmb = ttk.Combobox(top, values=self.bandeiras, state="readonly")
@@ -330,39 +341,40 @@ class TelaPontoVenda:
             return
 
         self.itens_venda = self.lista.get(0, tk.END)
-        
+
         print("Venda registrada:", {
             "itens": self.itens_venda,
             "total": self.total_compra,
             "pagamentos": self.pagamentos
         })
-        
+
         self.tela_resumo_venda()
 
 
     def tela_resumo_venda(self):
         self.limpar_frame()
-        self.frame_atual = ttk.Frame(self.janela)
+        self.frame_atual = ttk.Frame(self.janela_pdv) # Usar self.janela_pdv
         self.frame_atual.pack(padx=20, pady=20, fill=BOTH, expand=True)
 
         ttk.Label(self.frame_atual, text="Resumo da Venda", font=("Arial", 16)).pack(pady=10)
 
-        ttk.Label(self.frame_atual, text=f"Vendedor: {self.vendedor_selecionado}").pack(pady=2)
-        ttk.Label(self.frame_atual, text=f"Cliente: {self.dados_cliente.get('nome', '---')}").pack(pady=2)
-        ttk.Label(self.frame_atual, text=f"CPF: {self.dados_cliente.get('cpf', '---')}").pack(pady=2)
+        ttk.Label(self.frame_atual, text=f"Vendedor: {self.vendedor_selecionado}").pack(pady=2, anchor="w")
+        ttk.Label(self.frame_atual, text=f"Cliente: {self.dados_cliente.get('nome', '---')}").pack(pady=2, anchor="w")
+        ttk.Label(self.frame_atual, text=f"CPF: {self.dados_cliente.get('cpf', '---')}").pack(pady=2, anchor="w")
 
-        ttk.Label(self.frame_atual, text="Produtos:").pack(pady=5)
+        ttk.Label(self.frame_atual, text="Produtos:", font=("Arial", 12, "bold")).pack(pady=5, anchor="w")
         produtos_list = tk.Listbox(self.frame_atual, height=5)
         produtos_list.pack()
         for p in self.itens_venda:
             produtos_list.insert(tk.END, p)
 
-        ttk.Label(self.frame_atual, text="Pagamentos:").pack(pady=5)
+        ttk.Label(self.frame_atual, text="Pagamentos:", font=("Arial", 12, "bold")).pack(pady=5, anchor="w")
         pagamentos_list = tk.Listbox(self.frame_atual, height=5)
         pagamentos_list.pack()
         for forma, valor in self.pagamentos:
             pagamentos_list.insert(tk.END, f"{forma}: R$ {valor:.2f}")
 
-        ttk.Label(self.frame_atual, text=f"Total Pago: R$ {self.total_compra:.2f}", font=("Arial", 12, "bold")).pack(pady=10)
+        ttk.Label(self.frame_atual, text=f"Total Pago: R$ {self.total_compra:.2f}", font=("Arial", 12, "bold")).pack(pady=10, anchor="w")
 
-        ttk.Button(self.frame_atual, text="Nova Venda", command=self.tela_selecao_vendedor).pack(pady=10)
+        ttk.Button(self.frame_atual, text="Nova Venda", command=self.iniciar_pdv).pack(pady=10) # Para iniciar uma nova venda, abre outra janela de PDV ou reinicia a atual
+        ttk.Button(self.frame_atual, text="Fechar PDV", command=self.janela_pdv.destroy).pack(pady=5) # Adicionado botão para fechar apenas o PDV
