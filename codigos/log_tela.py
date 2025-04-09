@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 import ttkbootstrap as ttk #importando a biblioteca - necessário em todos os arquivos que mexem na interface -.
 from ttkbootstrap.constants import *
 from tela_principal import TelaMenu #importando a classe da tela principal que chamei de menu. Podem mudar o nome, mas alterem as chamadas corretamente para não haver erros.
@@ -27,8 +28,14 @@ class Tela: #iniciando a classe.
         self.ent_senha = tk.Entry(self.log)
         self.ent_senha.grid(row=3, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW')
 
-        self.btn_entrar = tk.Button(self.log, text='Entrar', bg='darkblue', fg='white', font = ("Arial", 14), command=self.tela_principal.menu) #chama a classe TelaMenu a partir da interação com o botão.
+        self.btn_entrar = tk.Button(self.log, text='Entrar', bg='darkblue', fg='white', font = ("Arial", 14), command=self.autentica) #chama a classe TelaMenu a partir da interação com o botão.
         self.btn_entrar.grid(row=4, column=0, columnspan=2, pady=10)
+
+    def autentica(self):
+        if self.user_ent.get() == "adm" and self.ent_senha.get() == "adm":
+            self.tela_principal.menu()
+        else:
+            messagebox.showwarning("Atenção!","Verificar credenciais.")
 
 # os comandos  abaixo fazem parte do loop da tela, que é usado pra iniciar a tela. N sei explicar, mas só sei fazer assim.
 janela = ttk.Window(themename='united')

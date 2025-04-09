@@ -21,6 +21,7 @@ class TelaMenu:
         self.gerenciador_tema = GerenciadorTema(janela)
         self.tela_venda = TelaPontoVenda(janela)
         self.tela_consulta = Consultas(janela)
+        self.relatorio = gerar_relatorio_pdf
 
         # --- NÃO HÁ MAIS CONFIGURAÇÃO DE BANCO DE DADOS ---
 
@@ -50,7 +51,8 @@ class TelaMenu:
 
         self.mnu_relatorios = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Relatórios', menu=self.mnu_relatorios)
-        self.mnu_relatorios.add_command(label='Divergências', command=self.tela_relatorio)
+        self.mnu_relatorios.add_command(label='Divergências', command=self.abrir_tela_relatorio)
+        self.mnu_relatorios.add_command(label='Vendas', command=self.tela_relatorio_vendas)
 
         self.mnu_treeviews = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Consultas', menu=self.mnu_treeviews)
@@ -161,50 +163,116 @@ class TelaMenu:
         # Exibe o Treeview com dados atuais (se houver) ou vazio
         self.filtrar_treeview(None)
     
+    def tela_relatorio_vendas(self):
+        self.tpl_relatorio_vendas = tk.Toplevel(self.tpl_menu)
+        self.tpl_relatorio_vendas.title("Vendas")
+
+        self.frm_principal_relVendas = ttk.Frame(self.tpl_relatorio_vendas, padding=10)
+        self.frm_principal_relVendas.pack(fill=BOTH, expand=True)
+    
+    def abrir_tela_relatorio(self):
+        if not self.dados_originais:
+            messagebox.showwarning("Zero arquivos", "É necessário subir um arquivo para gerar o relatório de divergências.")
+            return
+        self.tela_relatorio()
+
+
     def tela_relatorio(self):
         self.tpl_relatorios = tk.Toplevel(self.tpl_menu)
+        self.tpl_relatorios.title("Relatório de Divergências")
 
         self.frm_principal_relDivergencia = ttk.Frame(self.tpl_relatorios, padding=10)
+        self.frm_principal_relDivergencia.pack(fill=BOTH, expand=True)
 
-        # --- Frame Treeview ---
-        frm_treeview_Relatorio = ttk.Frame(self.frm_principal_relDivergencia)
-        frm_treeview_Relatorio.pack(fill=BOTH, expand=True, pady=(0, 10))
+        self.divergencias = []
+        self.negativados = []
+        self.pdvs = []
 
-        colunas_visiveis = ("ref", "sku", "desc", "tam", "est", "est_real")
-        self.tvw_relatorio = ttk.Treeview(frm_treeview_Relatorio, columns=colunas_visiveis, show="headings", height=15)
+        def criar_treeview(rotulo, dados):
+            ttk.Label(self.frm_principal_relDivergencia, text=rotulo, font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 0))
 
-        self.tvw_relatorio.heading("ref", text="Ref")
-        self.tvw_relatorio.column("ref", width=70, anchor=CENTER)
-        self.tvw_relatorio.heading("sku", text="SKU")
-        self.tvw_relatorio.column("sku", width=70, anchor=CENTER)
-        self.tvw_relatorio.heading("desc", text="Descrição")
-        self.tvw_relatorio.column("desc", width=300)
-        self.tvw_relatorio.heading("tam", text="Tam/Cap")
-        self.tvw_relatorio.column("tam", width=100)
-        self.tvw_relatorio.heading("est", text="Estoque")
-        self.tvw_relatorio.column("est", width=100, anchor=CENTER)
-        self.tvw_relatorio.heading("est_real", text="Est. Real")
-        self.tvw_relatorio.column("est_real", width=100, anchor=CENTER)
+            frame_tv = ttk.Frame(self.frm_principal_relDivergencia)
+            frame_tv.pack(fill=BOTH, expand=True)
 
-        self.tvw_relatorio.pack()
-        
-        self.btn_relatorios = ttk.Button(self.frm_principal_relDivergencia, text="Gerar Relaório PDF", command=self.gerar_relatorio)
-        self.btn_relatorios.pack()
-        self.frm_principal_relDivergencia.pack()
+            colunas = ("ref", "sku", "desc", "tam", "est", "est_real")
+            tree = ttk.Treeview(frame_tv, columns=colunas, show="headings", height=8)
 
-    # Exemplo de divergências
-    divergencias = [
-        {'produto': 'Caneta Azul', 'esperado': 100, 'contado': 80},
-        {'produto': 'Caderno A4', 'esperado': 50, 'contado': 53},
-    ]
+            # Configura colunas
+            for col, txt, width, align in [
+                ("ref", "Ref", 70, CENTER),
+                ("sku", "SKU", 70, CENTER),
+                ("desc", "Descrição", 300, "w"),
+                ("tam", "Tam/Cap", 100, CENTER),
+                ("est", "Estoque", 100, CENTER),
+                ("est_real", "Est. Real", 100, CENTER)
+            ]:
+                tree.heading(col, text=txt)
+                tree.column(col, width=width, anchor=align)
 
-    def gerar_relatorio(self):
-        if not self.divergencias:
-            messagebox.showwarning("Aviso", "Nenhuma divergência encontrada.")
-            return
+            # Scrollbar vertical
+            scrollbar_y = ttk.Scrollbar(frame_tv, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=scrollbar_y.set)
 
-        nome_arquivo = gerar_relatorio_pdf(self.divergencias)
-        messagebox.showinfo("Relatório gerado", f"Relatório salvo como:\n{nome_arquivo}")
+            # Layout
+            tree.grid(row=0, column=0, sticky="nsew")
+            scrollbar_y.grid(row=0, column=1, sticky="ns")
+            frame_tv.rowconfigure(0, weight=1)
+            frame_tv.columnconfigure(0, weight=1)
+
+            # Inserção de dados
+            for item in dados:
+                tree.insert("", "end", values=item)
+
+            return tree
+
+
+        # --- Classificação dos dados ---
+        for item in self.dados_originais:
+            if len(item) < 8:
+                continue
+
+            iid, ref, sku, desc, tam, est, _, est_real = item
+
+            desc_lower = str(desc).lower()
+            est_str = str(est).strip()
+            est_real_str = str(est_real).strip()
+
+            # Verificações
+            is_pdv = "pdv" in desc_lower
+            is_negativado = False
+            is_divergente = False
+
+            try:
+                est_int = int(est)
+                est_real_int = int(est_real) if est_real_str else None
+                is_negativado = est_int < 0
+                is_divergente = est_real_str and (est_int != est_real_int)
+            except:
+                is_divergente = est_real_str and (est_str != est_real_str)
+
+            valores = (ref, sku, desc, tam, est, est_real)
+
+            if is_divergente:
+                self.divergencias.append(valores)
+            if is_negativado:
+                self.negativados.append(valores)
+            if is_pdv:
+                self.pdvs.append(valores)
+
+        # --- Cria Treeviews ---
+        if self.divergencias:
+            self.tvw_divergencias = criar_treeview("Produtos com divergência", self.divergencias)
+        if self.negativados:
+            self.tvw_negativados = criar_treeview("Produtos negativados", self.negativados)
+        if self.pdvs:
+            self.tvw_pdvs = criar_treeview("Produtos PDV", self.pdvs)
+
+        # --- Botão PDF ---
+        ttk.Button(
+            self.frm_principal_relDivergencia,
+            text="Gerar Relatório PDF",
+            command=lambda: self.relatorio(self.divergencias, self.negativados, self.pdvs)
+        ).pack(pady=(20, 0))
 
     def upp_arquivo(self):
         """Abre um arquivo TXT, lê os dados e atualiza o Treeview."""

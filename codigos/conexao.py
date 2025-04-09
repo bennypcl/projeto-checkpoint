@@ -1,5 +1,7 @@
 import sqlite3
+import os
 
 def conectar():
-    conexao = sqlite3.connect(r"C:\Users\André Gustavo Castro\OneDrive\Documentos\CHECKPOINT\projeto-checkpoint\banco_dados\checkp.db")
+    caminho = os.path.join(os.path.dirname(__file__), r"..\banco_dados\checkp.db")
+    conexao = sqlite3.connect(caminho)
     return conexao
