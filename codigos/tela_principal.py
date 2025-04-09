@@ -52,7 +52,7 @@ class TelaMenu:
         self.mnu_relatorios = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Relatórios', menu=self.mnu_relatorios)
         self.mnu_relatorios.add_command(label='Divergências', command=self.abrir_tela_relatorio)
-        self.mnu_relatorios.add_command(label='Vendas', command=self.tela_relatorio_vendas)
+        # self.mnu_relatorios.add_command(label='Vendas', command=self.tela_relatorio_vendas)
 
         self.mnu_treeviews = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Consultas', menu=self.mnu_treeviews)

@@ -25,7 +25,7 @@ class Tela: #iniciando a classe.
 
         self.lbl_senha = ttk.Label(self.log, text = 'Senha:', font = ("Arial", 14))
         self.lbl_senha.grid(row=2, column=0, sticky="w")
-        self.ent_senha = tk.Entry(self.log)
+        self.ent_senha = tk.Entry(self.log, show="*")
         self.ent_senha.grid(row=3, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW')
 
         self.btn_entrar = tk.Button(self.log, text='Entrar', bg='darkblue', fg='white', font = ("Arial", 14), command=self.autentica) #chama a classe TelaMenu a partir da interação com o botão.
