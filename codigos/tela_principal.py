@@ -59,10 +59,10 @@ class TelaMenu:
         self.mnu_treeviews.add_command(label='Funcionários', command=self.tela_consulta.visualizar_usuarios)
         self.mnu_treeviews.add_command(label='Clientes', command=self.tela_consulta.visualizar_clientes)
         self.mnu_treeviews.add_command(label='Produtos', command=self.tela_consulta.visualizar_produtos)
-        self.mnu_treeviews.add_command(label='Pedidos', command=self.tela_consulta.visualizar_pedidos)
-        self.mnu_treeviews.add_command(label='Itens dos Pedidos', command=self.tela_consulta.visualizar_itens_pedido)
-        self.mnu_treeviews.add_command(label='Pagamentos', command=self.tela_consulta.visualizar_pagamentos)
-        self.mnu_treeviews.add_command(label='Temas', command=self.tela_consulta.visualizar_temas)
+        # self.mnu_treeviews.add_command(label='Pedidos', command=self.tela_consulta.visualizar_pedidos)
+        # self.mnu_treeviews.add_command(label='Itens dos Pedidos', command=self.tela_consulta.visualizar_itens_pedido)
+        # self.mnu_treeviews.add_command(label='Pagamentos', command=self.tela_consulta.visualizar_pagamentos)
+        # self.mnu_treeviews.add_command(label='Temas', command=self.tela_consulta.visualizar_temas)
 
 
 
