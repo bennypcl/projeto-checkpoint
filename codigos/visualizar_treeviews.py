@@ -84,7 +84,8 @@ class Consultas:
             cursor.close()
             conexao.close()
 
-        janela_produtos = ttkb.Toplevel(self.master, title="Visualizar Produtos", themename="flatly")
+        janela_produtos = ttkb.Toplevel(self.master)
+        janela_produtos.title("Visualizar Produtos")
         janela_produtos.geometry("900x500")
 
         colunas = ("ID", "Ref", "SKU", "Descrição", "Quantidade", "Valor")
@@ -123,8 +124,8 @@ class Consultas:
         finally:
             cursor.close()
             conexao.close()
-
-        janela_pedidos = ttkb.Toplevel(self.master, title="Visualizar Pedidos", themename="flatly")
+        janela_pedidos = ttkb.Toplevel(self.master)
+        janela_pedidos.title("Visualizar Pedidos")
         janela_pedidos.geometry("1000x600")
 
         colunas = ("ID", "Cliente", "Vendedor", "Data", "Total")
@@ -164,7 +165,8 @@ class Consultas:
             cursor.close()
             conexao.close()
 
-        janela_itens_pedido = ttkb.Toplevel(self.master, title="Visualizar Itens do Pedido", themename="flatly")
+        janela_itens_pedido = ttkb.Toplevel(self.master)
+        janela_itens_pedido.title("Visualizar Itens dos Pedidos")
         janela_itens_pedido.geometry("900x500")
 
         colunas = ("ID", "Pedido ID", "Produto", "Quantidade", "Valor Unitário")
@@ -201,7 +203,8 @@ class Consultas:
             cursor.close()
             conexao.close()
 
-        janela_pagamentos = ttkb.Toplevel(self.master, title="Visualizar Pagamentos", themename="flatly")
+        janela_pagamentos = ttkb.Toplevel(self.master)
+        janela_pagamentos.title("Visualizar Pagamentos")
         janela_pagamentos.geometry("700x400")
 
         colunas = ("ID", "Pedido ID", "Método", "Valor")
@@ -231,7 +234,8 @@ class Consultas:
             cursor.close()
             conexao.close()
 
-        janela_temas = ttkb.Toplevel(self.master, title="Visualizar Temas", themename="flatly")
+        janela_temas = ttkb.Toplevel(self.master)
+        janela_temas.title("Visualizar Temas")
         janela_temas.geometry("400x300")
 
         colunas = ("ID", "Nome", "Valor")

@@ -152,14 +152,27 @@ class TelaPontoVenda:
                 return False
         return True
 
+        
     def verificar_dados_cliente(self):
-        if not self.validar_campos_cliente():
-            return
+        cpf = self.entry_cpf.get().strip()
+        nome = self.entry_nome.get().strip()
+        telefone = self.entry_telefone.get().strip()
+        nascimento = self.entry_nascimento.get().strip()
+
+        # Verifica se o CPF foi preenchido
+        if cpf:
+            # Se CPF for informado, os demais campos se tornam obrigatórios
+            if not nome or not telefone or not nascimento:
+                messagebox.showwarning("Campos obrigatórios", "Preencha todos os campos do cliente (nome, telefone e nascimento) ao informar o CPF.")
+                return
+        else:
+            self.tela_venda()
+
         self.dados_cliente = {
-            "cpf": self.entry_cpf.get(),
-            "nome": self.entry_nome.get(),
-            "telefone": self.entry_telefone.get(),
-            "nascimento": self.entry_nascimento.get()
+            "cpf": cpf,
+            "nome": nome,
+            "telefone": telefone,
+            "nascimento": nascimento
         }
 
         try:
@@ -168,13 +181,16 @@ class TelaPontoVenda:
 
             cursor.execute("""
                 INSERT INTO clientes (cli_cpf, cli_nome, cli_telefone, cli_data_nascimento)
-                VALUES (%s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE cli_nome=VALUES(cli_nome), cli_telefone=VALUES(cli_telefone), cli_data_nascimento=VALUES(cli_data_nascimento)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(cli_cpf) DO UPDATE SET
+                    cli_nome = excluded.cli_nome,
+                    cli_telefone = excluded.cli_telefone,
+                    cli_data_nascimento = excluded.cli_data_nascimento
             """, (
                 self.dados_cliente["cpf"],
                 self.dados_cliente["nome"],
                 self.dados_cliente["telefone"],
-                self.dados_cliente["nascimento"] or None
+                self.dados_cliente["nascimento"]
             ))
 
             conn.commit()
@@ -183,6 +199,7 @@ class TelaPontoVenda:
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao inserir cliente no banco: {e}")
             return
+
 
         self.tela_venda()
 
@@ -200,6 +217,8 @@ class TelaPontoVenda:
         self.entry_produto = ttk.Entry(container_esquerda)
         self.entry_produto.pack()
         self.entry_produto.insert(0, "Produto")
+
+
 
         # Frame para os botões lado a lado
         botoes_frame = ttk.Frame(container_esquerda)
@@ -251,11 +270,51 @@ class TelaPontoVenda:
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
 
     def adicionar_produto(self):
-        produto = self.entry_produto.get()
-        if produto:
-            self.lista.insert(tk.END, produto)
-            self.total_compra += 10
-            self.atualizar_total()
+        termo = self.entry_produto.get().strip()
+
+        if not termo:
+            return
+
+        try:
+            conn = conectar()
+            cursor = conn.cursor()
+
+            produto = None
+            termos = termo.split()
+
+            if len(termos) == 2:
+                # Se o usuário digitou REF e SKU
+                ref, sku = termos
+                cursor.execute("""
+                    SELECT pro_id, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor
+                    FROM produtos
+                    WHERE pro_ref = ? AND pro_sku = ?
+                    LIMIT 1
+                """, (ref, sku))
+            else:
+                # Busca padrão por nome ou código simples
+                cursor.execute("""
+                    SELECT pro_id, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor
+                    FROM produtos
+                    WHERE pro_ref = ? OR pro_sku = ? OR pro_descricao LIKE ?
+                    LIMIT 1
+                """, (termo, termo, f"%{termo}%"))
+
+            produto = cursor.fetchone()
+
+            if produto:
+                descricao = f"{produto[1]} - {produto[2]} - {produto[3]}"
+                self.lista.insert(tk.END, descricao)
+                self.total_compra += produto[5]
+                self.atualizar_total()
+            else:
+                messagebox.showwarning("Produto não encontrado", "Nenhum produto encontrado com esse código.")
+
+            cursor.close()
+            conn.close()
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao buscar produto: {e}")
 
     def remover_produto(self):
         selecionado = self.lista.curselection()
