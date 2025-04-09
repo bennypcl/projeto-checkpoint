@@ -23,7 +23,7 @@ class Consultas:
             conexao.close()
 
         janela_usuarios = tk.Toplevel(self.master)
-        janela_usuarios.geometry("700x400")
+        janela_usuarios.geometry("700x600")
         janela_usuarios.title("Visualizar Funcionários")
 
         colunas = ("ID", "Cargo", "Nome", "CPF")
@@ -86,7 +86,7 @@ class Consultas:
 
         janela_produtos = ttkb.Toplevel(self.master)
         janela_produtos.title("Visualizar Produtos")
-        janela_produtos.geometry("900x500")
+        janela_produtos.geometry("900x700")
 
         colunas = ("ID", "Ref", "SKU", "Descrição", "Quantidade", "Valor")
         tree = ttk.Treeview(janela_produtos, columns=colunas, show="headings")
@@ -126,7 +126,7 @@ class Consultas:
             conexao.close()
         janela_pedidos = ttkb.Toplevel(self.master)
         janela_pedidos.title("Visualizar Pedidos")
-        janela_pedidos.geometry("1000x600")
+        janela_pedidos.geometry("1000x800")
 
         colunas = ("ID", "Cliente", "Vendedor", "Data", "Total")
         tree = ttk.Treeview(janela_pedidos, columns=colunas, show="headings")
@@ -167,7 +167,7 @@ class Consultas:
 
         janela_itens_pedido = ttkb.Toplevel(self.master)
         janela_itens_pedido.title("Visualizar Itens dos Pedidos")
-        janela_itens_pedido.geometry("900x500")
+        janela_itens_pedido.geometry("900x700")
 
         colunas = ("ID", "Pedido ID", "Produto", "Quantidade", "Valor Unitário")
         tree = ttk.Treeview(janela_itens_pedido, columns=colunas, show="headings")
@@ -205,7 +205,7 @@ class Consultas:
 
         janela_pagamentos = ttkb.Toplevel(self.master)
         janela_pagamentos.title("Visualizar Pagamentos")
-        janela_pagamentos.geometry("700x400")
+        janela_pagamentos.geometry("700x600")
 
         colunas = ("ID", "Pedido ID", "Método", "Valor")
         tree = ttk.Treeview(janela_pagamentos, columns=colunas, show="headings")
@@ -236,7 +236,7 @@ class Consultas:
 
         janela_temas = ttkb.Toplevel(self.master)
         janela_temas.title("Visualizar Temas")
-        janela_temas.geometry("400x300")
+        janela_temas.geometry("400x400")
 
         colunas = ("ID", "Nome", "Valor")
         tree = ttk.Treeview(janela_temas, columns=colunas, show="headings")
