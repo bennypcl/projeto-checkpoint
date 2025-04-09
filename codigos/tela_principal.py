@@ -46,6 +46,12 @@ class TelaMenu:
         self.mnu_principal.add_cascade(label='Configurações', menu=self.mnu_configuracao)
         self.mnu_configuracao.add_command(label='Temas', command=self.gerenciador_tema.mudar_tema)
 
+        self.mnu_relatorios = tk.Menu(self.mnu_principal, tearoff=0)
+        self.mnu_principal.add_cascade(label='Relatórios', menu=self.mnu_relatorios)
+        self.mnu_relatorios.add_command(label='Divergências', command=self.tela_relatorio)
+
+        # self.mnu_relatorios.add_command(label='Vendas', command=)
+
         self.tpl_menu.config(menu=self.mnu_principal)
 
         # Frame principal
@@ -77,8 +83,9 @@ class TelaMenu:
         # --- Tags ---
         self.tvw_inventario.tag_configure("sigla_pdv", background="yellow")
         self.tvw_inventario.tag_configure("zerado", background="lightgray")
-        self.tvw_inventario.tag_configure("negativado", background="gray", foreground="white")
+        self.tvw_inventario.tag_configure("diferente_zerado", background="red", foreground="white")
         self.tvw_inventario.tag_configure("diferente", background="red", foreground="white")
+        self.tvw_inventario.tag_configure("igual_zerado", background="lightgreen")
         self.tvw_inventario.tag_configure("igual", background="lightgreen")
 
         # --- Cabeçalhos e Larguras ---
@@ -145,12 +152,15 @@ class TelaMenu:
         self.btn_copos = ttk.Button(frm_filtros_acoes, text="Copos", command=lambda: self.filtrar_treeview(("descricao", "Copo"))) # Assume 'Copo' na descrição
         self.btn_copos.grid(row=3, column=3, padx=5, pady=3, sticky=EW)
 
-        self.btn_tudocerto = ttk.Button(self.frm_principal_inventario, text="Gerar Relatório de Divergências", command=self.gerar_relatorio)
-        self.btn_tudocerto.pack()
-
         # Exibe o Treeview com dados atuais (se houver) ou vazio
         self.filtrar_treeview(None)
     
+    def tela_relatorio(self):
+        self.tpl_relatorios = tk.Toplevel(self.tpl_menu)
+        
+        self.btn_relatorios = ttk.Button(self.tpl_relatorios, text="Gerar Relaório PDF", command=self.gerar_relatorio)
+        self.btn_relatorios.pack()
+
     # Exemplo de divergências
     divergencias = [
         {'produto': 'Caneta Azul', 'esperado': 100, 'contado': 80},
@@ -305,9 +315,25 @@ class TelaMenu:
                 # sobrescrevendo qualquer tag de comparação anterior implicitamente
                 # pois estamos reconstruindo as tags do zero aqui no filtro.
                 if not comparacao_igual:
-                    tags_aplicar.append("diferente")
+                    # Verifica se também é zerado e aplica tag combinada
+                    if "zerado" in tags_aplicar:
+                        tags_aplicar.insert(0, "diferente_zerado")
+                        # Remove as tags separadas, já que a combinada cobre ambas
+                        if "diferente" in tags_aplicar:
+                            tags_aplicar.remove("diferente")
+                        if "zerado" in tags_aplicar:
+                            tags_aplicar.remove("zerado")
+                    else:
+                        tags_aplicar.insert(0, "diferente")
                 else:
-                    tags_aplicar.append("igual")
+                    if "zerado" in tags_aplicar:
+                        tags_aplicar.insert(0, "igual_zerado")
+                        if "zerado" in tags_aplicar:
+                            tags_aplicar.remove("zerado")
+                        if "igual" in tags_aplicar:
+                            tags_aplicar.remove("igual")
+                    else:
+                        tags_aplicar.insert(0, "igual")
             # Se est_real estiver vazio, NENHUMA tag de comparação ('igual'/'diferente') é adicionada.
 
             # --- Lógica de Filtragem ---
@@ -411,11 +437,29 @@ class TelaMenu:
 
                     # 3. Adiciona SOMENTE a nova tag de comparação ('igual' ou 'diferente')
                     if not comparacao_igual:
-                        tags_finais.append("diferente")
-                        print("DEBUG: Adicionando tag 'diferente'") # Debug
+                        if "zerado" in tags_finais:
+                            # Usa a tag combinada
+                            tags_finais.insert(0, "diferente_zerado")
+                            print("DEBUG: Adicionando tag 'diferente_zerado'")  # Debug
+                            # Remove as tags separadas
+                            if "zerado" in tags_finais:
+                                tags_finais.remove("zerado")
+                            if "diferente" in tags_finais:
+                                tags_finais.remove("diferente")
+                        else:
+                            tags_finais.insert(0, "diferente")
+                            print("DEBUG: Adicionando tag 'diferente'")  # Debug
                     else:
-                        tags_finais.append("igual")
-                        print("DEBUG: Adicionando tag 'igual'") # Debug
+                        if "zerado" in tags_finais:
+                            tags_finais.insert(0, "igual_zerado")
+                            print("DEBUG: Adicionando tag 'igual_zerado'")  # Debug
+                            if "zerado" in tags_finais:
+                                tags_finais.remove("zerado")
+                            if "igual" in tags_finais:
+                                tags_finais.remove("igual")
+                        else:
+                            tags_finais.insert(0, "igual")
+                            print("DEBUG: Adicionando tag 'igual'")  # Debug
 
                     # 4. Atualiza o item no Treeview
                     self.tvw_inventario.item(item_iid, values=tuple(valores_atuais_tv), tags=tuple(tags_finais))
