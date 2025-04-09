@@ -50,6 +50,9 @@ class TelaMenu:
         self.mnu_principal.add_cascade(label='Relatórios', menu=self.mnu_relatorios)
         self.mnu_relatorios.add_command(label='Divergências', command=self.tela_relatorio)
 
+        self.mnu_treeviews = tk.Menu(self.mnu_principal, tearoff=0)
+        self.mnu_principal.add_cascade(label='Consultas', menu=self.mnu_treeviews)
+        self.mnu_treeviews.add_command(label='Clientes', command=self.tela_relatorio)
         # self.mnu_relatorios.add_command(label='Vendas', command=)
 
         self.tpl_menu.config(menu=self.mnu_principal)

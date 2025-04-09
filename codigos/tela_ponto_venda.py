@@ -3,6 +3,9 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter import messagebox, simpledialog
 import re
+import datetime
+from conexao_banco import conectar
+
 #from tela_principal import TelaMenu
 
 
@@ -158,6 +161,29 @@ class TelaPontoVenda:
             "telefone": self.entry_telefone.get(),
             "nascimento": self.entry_nascimento.get()
         }
+
+        try:
+            conn = conectar()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                INSERT INTO clientes (cli_cpf, cli_nome, cli_telefone, cli_data_nascimento)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE cli_nome=VALUES(cli_nome), cli_telefone=VALUES(cli_telefone), cli_data_nascimento=VALUES(cli_data_nascimento)
+            """, (
+                self.dados_cliente["cpf"],
+                self.dados_cliente["nome"],
+                self.dados_cliente["telefone"],
+                self.dados_cliente["nascimento"] or None
+            ))
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao inserir cliente no banco: {e}")
+            return
+
         self.tela_venda()
 
     def tela_venda(self):
