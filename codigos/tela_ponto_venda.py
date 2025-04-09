@@ -4,7 +4,7 @@ from ttkbootstrap.constants import *
 from tkinter import messagebox, simpledialog
 import re
 import datetime
-from conexao_banco import conectar
+from conexao import conectar
 
 #from tela_principal import TelaMenu
 

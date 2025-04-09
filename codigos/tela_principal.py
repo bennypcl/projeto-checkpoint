@@ -55,7 +55,7 @@ class TelaMenu:
         self.mnu_treeviews = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Consultas', menu=self.mnu_treeviews)
         self.mnu_treeviews.add_command(label='Funcionários', command=self.tela_consulta.visualizar_usuarios)
-        self.mnu_treeviews.add_command(label='Clientes')
+        self.mnu_treeviews.add_command(label='Clientes', command=self.tela_consulta.visualizar_clientes)
         # self.mnu_relatorios.add_command(label='Vendas', command=)
 
         self.tpl_menu.config(menu=self.mnu_principal)
