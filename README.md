@@ -18,3 +18,6 @@ Projeto de software para auxílio à agilidade de correções e cadastros no inv
 - [@daricelio](https://github.com/daricelio)
 ## 🚀 Sobre a equipe
 Estudantes do 6° período do curso Bacharelado em Sistemas de Informação, na Universidade Federal do Acre - UFAC.
+
+## Links do projeto
+[Protótipos no figma](https://www.figma.com/design/z9QkVeAw3zGIcecXtg2NzO/Projeto-Checkpoint?node-id=0-1&t=UhtouFYWGMPo0hKg-1)
