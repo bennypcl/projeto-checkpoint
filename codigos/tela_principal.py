@@ -160,9 +160,34 @@ class TelaMenu:
     
     def tela_relatorio(self):
         self.tpl_relatorios = tk.Toplevel(self.tpl_menu)
+
+        self.frm_principal_relDivergencia = ttk.Frame(self.tpl_relatorios, padding=10)
+
+        # --- Frame Treeview ---
+        frm_treeview_Relatorio = ttk.Frame(self.frm_principal_relDivergencia)
+        frm_treeview_Relatorio.pack(fill=BOTH, expand=True, pady=(0, 10))
+
+        colunas_visiveis = ("ref", "sku", "desc", "tam", "est", "est_real")
+        self.tvw_relatorio = ttk.Treeview(frm_treeview_Relatorio, columns=colunas_visiveis, show="headings", height=15)
+
+        self.tvw_relatorio.heading("ref", text="Ref")
+        self.tvw_relatorio.column("ref", width=70, anchor=CENTER)
+        self.tvw_relatorio.heading("sku", text="SKU")
+        self.tvw_relatorio.column("sku", width=70, anchor=CENTER)
+        self.tvw_relatorio.heading("desc", text="Descrição")
+        self.tvw_relatorio.column("desc", width=300)
+        self.tvw_relatorio.heading("tam", text="Tam/Cap")
+        self.tvw_relatorio.column("tam", width=100)
+        self.tvw_relatorio.heading("est", text="Estoque")
+        self.tvw_relatorio.column("est", width=100, anchor=CENTER)
+        self.tvw_relatorio.heading("est_real", text="Est. Real")
+        self.tvw_relatorio.column("est_real", width=100, anchor=CENTER)
+
+        self.tvw_relatorio.pack()
         
-        self.btn_relatorios = ttk.Button(self.tpl_relatorios, text="Gerar Relaório PDF", command=self.gerar_relatorio)
+        self.btn_relatorios = ttk.Button(self.frm_principal_relDivergencia, text="Gerar Relaório PDF", command=self.gerar_relatorio)
         self.btn_relatorios.pack()
+        self.frm_principal_relDivergencia.pack()
 
     # Exemplo de divergências
     divergencias = [
