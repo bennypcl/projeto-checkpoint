@@ -7,6 +7,7 @@ from tkinter import messagebox
 from temas import GerenciadorTema
 from tela_ponto_venda import TelaPontoVenda
 from relatorio_pdf import gerar_relatorio_pdf
+from visualizar_treeviews import Consultas
 
 class TelaMenu:
     def __init__(self, janela):
@@ -19,6 +20,7 @@ class TelaMenu:
         self.novo_item_contador = 0
         self.gerenciador_tema = GerenciadorTema(janela)
         self.tela_venda = TelaPontoVenda(janela)
+        self.tela_consulta = Consultas(janela)
 
         # --- NÃO HÁ MAIS CONFIGURAÇÃO DE BANCO DE DADOS ---
 
@@ -52,7 +54,8 @@ class TelaMenu:
 
         self.mnu_treeviews = tk.Menu(self.mnu_principal, tearoff=0)
         self.mnu_principal.add_cascade(label='Consultas', menu=self.mnu_treeviews)
-        self.mnu_treeviews.add_command(label='Clientes', command=self.tela_relatorio)
+        self.mnu_treeviews.add_command(label='Funcionários', command=self.tela_consulta.visualizar_usuarios)
+        self.mnu_treeviews.add_command(label='Clientes')
         # self.mnu_relatorios.add_command(label='Vendas', command=)
 
         self.tpl_menu.config(menu=self.mnu_principal)
