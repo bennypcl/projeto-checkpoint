@@ -38,7 +38,7 @@ class TelaPontoVenda:
         if self.janela_pdv is None or not tk.Toplevel.winfo_exists(self.janela_pdv):
             self.janela_pdv = tk.Toplevel(self.master)
             self.janela_pdv.title("Ponto de Venda")
-            self.janela_pdv.geometry("800x600") # Definindo um tamanho inicial para a janela do PDV
+            self.janela_pdv.state('zoomed')
             self.tela_selecao_vendedor()
         else:
             self.janela_pdv.lift() # Se já existir, traz para frente
@@ -262,10 +262,18 @@ class TelaPontoVenda:
 
     def calcular_troco(self, valor_pago, valor_restante):
         troco = valor_pago - valor_restante
+
+        # Print de diagnóstico final para termos 100% de certeza do valor
+        print(f">>> DEBUG: Dentro de calcular_troco. Valor do troco calculado: {troco}")
+
         if troco > 0:
-            self.label_troco.config(text=f"Troco: R$ {troco:.2f}")
+            texto_troco = f"Troco: R$ {troco:.2f}"
+            self.label_troco.config(text=texto_troco)
         else:
             self.label_troco.config(text="")
+        
+        # Comando para forçar a atualização visual da janela do PDV
+        self.janela_pdv.update_idletasks()
 
 
     def pagamento_dinheiro(self):
@@ -274,21 +282,42 @@ class TelaPontoVenda:
         try:
             valor_pago = float(valor_str.replace(",", "."))
         except ValueError:
-            messagebox.showerror("Erro", "Digite um valor numérico válido.")
+            messagebox.showerror("Erro", "Digite um valor numérico válido.", parent=self.janela_pdv)
             return
 
         if valor_pago <= 0:
-            messagebox.showerror("Erro", "Digite um valor maior que zero.")
+            messagebox.showerror("Erro", "Digite um valor maior que zero.", parent=self.janela_pdv)
             return
 
-        valor_restante = self.obter_valor_restante()
-        self.calcular_troco(valor_pago, valor_restante)
-        self.registrar_pagamento("Dinheiro", valor_pago)
-        self.exibir_pagamentos()
+        # AQUI ESTÁ A CORREÇÃO PRINCIPAL
+        valor_restante = self.valor_restante
+
+        if valor_pago >= valor_restante:
+            self.calcular_troco(valor_pago, valor_restante)
+            self.registrar_pagamento("Dinheiro", valor_restante)
+        else:
+            self.label_troco.config(text="")
+            self.registrar_pagamento("Dinheiro", valor_pago)
 
 
     def pagamento_debito(self):
-        top = tk.Toplevel(self.janela_pdv) # Usar self.janela_pdv
+        # 1. Pega e valida o valor ANTES de abrir a nova janela
+        valor_str = self.valor_editavel.get()
+        try:
+            valor_pago = float(valor_str.replace(",", "."))
+        except ValueError:
+            messagebox.showerror("Erro", "Valor de pagamento inválido.", parent=self.janela_pdv)
+            return
+
+        if valor_pago <= 0:
+            messagebox.showerror("Erro", "O valor do pagamento deve ser maior que zero.", parent=self.janela_pdv)
+            return
+        if valor_pago > self.valor_restante:
+            messagebox.showerror("Erro", f"O valor do pagamento (R$ {valor_pago:.2f}) não pode ser maior que o valor restante (R$ {self.valor_restante:.2f}).", parent=self.janela_pdv)
+            return
+
+        # 2. Abre a janela para selecionar a bandeira
+        top = tk.Toplevel(self.janela_pdv)
         top.title("Débito")
         ttk.Label(top, text="Selecione a bandeira:").pack(pady=5)
         cmb = ttk.Combobox(top, values=self.bandeiras, state="readonly")
@@ -297,15 +326,30 @@ class TelaPontoVenda:
         def confirmar():
             bandeira = cmb.get()
             if bandeira:
-                valor = self.obter_valor_restante()
-                if valor > 0:
-                    self.registrar_pagamento(f"Débito ({bandeira})", valor)
-                    top.destroy()
+                # 3. Usa o 'valor_pago' que foi validado anteriormente
+                self.registrar_pagamento(f"Débito ({bandeira})", valor_pago)
+                top.destroy()
 
         ttk.Button(top, text="Confirmar", command=confirmar).pack(pady=10)
 
     def pagamento_credito(self):
-        top = tk.Toplevel(self.janela_pdv) # Usar self.janela_pdv
+        # 1. Pega e valida o valor ANTES de abrir a nova janela
+        valor_str = self.valor_editavel.get()
+        try:
+            valor_pago = float(valor_str.replace(",", "."))
+        except ValueError:
+            messagebox.showerror("Erro", "Valor de pagamento inválido.", parent=self.janela_pdv)
+            return
+
+        if valor_pago <= 0:
+            messagebox.showerror("Erro", "O valor do pagamento deve ser maior que zero.", parent=self.janela_pdv)
+            return
+        if valor_pago > self.valor_restante:
+            messagebox.showerror("Erro", f"O valor do pagamento (R$ {valor_pago:.2f}) não pode ser maior que o valor restante (R$ {self.valor_restante:.2f}).", parent=self.janela_pdv)
+            return
+
+        # 2. Abre a janela para selecionar bandeira e parcelas
+        top = tk.Toplevel(self.janela_pdv)
         top.title("Crédito")
         ttk.Label(top, text="Selecione a bandeira:").pack(pady=5)
         cmb = ttk.Combobox(top, values=self.bandeiras, state="readonly")
@@ -319,17 +363,32 @@ class TelaPontoVenda:
             bandeira = cmb.get()
             parcelas = spin.get()
             if bandeira and parcelas:
-                valor = self.obter_valor_restante()
-                if valor > 0:
-                    self.registrar_pagamento(f"Crédito {parcelas}x ({bandeira})", valor)
-                    top.destroy()
+                # 3. Usa o 'valor_pago' que foi validado anteriormente
+                self.registrar_pagamento(f"Crédito {parcelas}x ({bandeira})", valor_pago)
+                top.destroy()
 
         ttk.Button(top, text="Confirmar", command=confirmar).pack(pady=10)
 
     def pagamento_pix(self):
-        valor = self.obter_valor_restante()
-        if valor > 0:
-            self.registrar_pagamento("Pix", valor)
+        # 1. Pega o valor do campo de texto, igual no pagamento_dinheiro
+        valor_str = self.valor_editavel.get()
+        try:
+            valor_pago = float(valor_str.replace(",", "."))
+        except ValueError:
+            messagebox.showerror("Erro", "Valor de pagamento inválido.", parent=self.janela_pdv)
+            return
+
+        # 2. Validações importantes
+        if valor_pago <= 0:
+            messagebox.showerror("Erro", "O valor do pagamento deve ser maior que zero.", parent=self.janela_pdv)
+            return
+        # Impede que se pague via pix um valor maior que o devido
+        if valor_pago > self.valor_restante:
+            messagebox.showerror("Erro", f"O valor do pagamento (R$ {valor_pago:.2f}) não pode ser maior que o valor restante (R$ {self.valor_restante:.2f}).", parent=self.janela_pdv)
+            return
+        
+        # 3. Registra o pagamento com o valor que foi digitado
+        self.registrar_pagamento("Pix", valor_pago)
 
     def finalizar_venda(self):
         if self.total_compra <= 0 or self.lista.size() == 0:
