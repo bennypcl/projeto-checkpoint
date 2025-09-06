@@ -1,0 +1,20 @@
+P0001;S0001;Camisetas Batman pdv;M;10;89.90
+P0002;S0002;Caneca Star Wars;350ml;0;49.90
+P0003;S0003;Meias Harry Potter;Único;40;19.90
+P0004;S0004;Capa de Celular Marvel;iPhone 13;-15;59.90
+P0005;S0005;Chaveiro Zelda pdv;Pequeno;100;14.90
+P0006;S0006;Almofada Pikachu;40x40cm;20;69.90
+P0007;S0007;Caderno Stranger Things;200 folhas;30;34.90
+P0008;S0008;Boné Naruto;Único;-1;44.90
+P0009;S0009;Luminária Groot;20cm;5;99.90
+P0010;S0010;Copo Rick and Morty;300ml;12;39.90
+P0011;S0011;Funko Pop Mandalorian;10cm;8;129.90
+P0012;S0012;Poster Senhor dos Anéis pdv;60x90cm;35;29.90
+P0013;S0013;Mousepad Dragon Ball Z;Grande;0;45.90
+P0014;S0014;Bloco de Notas Pokémon;50 folhas;50;12.50
+P0015;S0015;Squeeze Liga da Justiça;750ml;22;55.00
+P0016;S0016;Camisetas Star Wars;G;30;99.90
+P0017;S0017;Mixes Marvel;Pacote;-1;29.90
+P0018;S0018;Moletons Harry Potter;GG;15;149.90
+P0019;S0019;Bonés Zelda pdv;Único;20;54.90
+P0020;S0020;Copos Rick and Morty;500ml;28;44.90
