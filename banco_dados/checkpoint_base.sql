@@ -276,3 +276,9 @@ insert into temas (tema_nome, valor) values
 ('solar', 'claro');
 
 ALTER TABLE produtos ADD COLUMN pro_caminho_imagem VARCHAR(255);
+
+INSERT INTO produtos (pro_ref, pro_sku, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor, pro_caminho_imagem) 
+VALUES ('P0001', 'S0001', 'Camisetas Batman pdv', 'M', 'Indefinida', 10, 89.90, 'imagens_produtos/batman_camiseta.jpg');
+
+INSERT INTO produtos (pro_ref, pro_sku, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor, pro_caminho_imagem) 
+VALUES ('P0002', 'S0002', 'Caneca Star Wars', '350ml', 'Indefinida', 0, 49.90, 'imagens_produtos/caneca_star_wars.jpg');

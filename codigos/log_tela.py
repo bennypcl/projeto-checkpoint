@@ -1,4 +1,3 @@
-# log_tela.py (Versão com cores corrigidas no carregamento)
 import tkinter as tk
 from tkinter import messagebox
 import ttkbootstrap as ttk

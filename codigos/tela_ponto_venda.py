@@ -532,9 +532,6 @@ class TelaPontoVenda:
         scrollbar = ttk.Scrollbar(frame_lista_produtos, orient="vertical", command=self.tvw_produtos.yview)
         self.tvw_produtos.configure(yscrollcommand=scrollbar.set)
         scrollbar.grid(row=0, column=1, sticky="ns")
-        
-        self.btn_remover = ttk.Button(container_esquerda, text="Remover Produto Selecionado", command=self.remover_produto)
-        self.btn_remover.grid(row=3, column=0, sticky="ew", pady=(10, 0))
 
         # Seção de Totais
         frame_totais = ttk.Frame(container_esquerda)
@@ -1014,15 +1011,16 @@ class TelaPontoVenda:
             "total": self.total_compra,
             "produtos": [p['nome'] for p in self.produtos_na_venda], # Pega só os nomes
             "pagamentos": self.pagamentos,
-            "data": datetime.now().strftime("%d/%m/%Y %H:%M")
+            "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "desconto": self.desconto_aplicado_info
         }
         
-        # A MÁGICA ACONTECE AQUI: Adiciona a venda à lista central
+        # Adiciona a venda à lista central
         self.lista_de_vendas_global.append(dados_da_venda)
         
         print("Venda registrada com sucesso:", dados_da_venda)
 
-        # 1. VERIFICA O CHECKBOX "Imprimir Ticket de Troca" AQUI
+        # 1. VERIFICA O CHECKBOX "Imprimir Ticket de Troca"
         if self.imprimir_ticket_var.get():
             
             # Se o checkbox estiver marcado, ENTRA NESTE BLOCO para gerar os PDFs
@@ -1046,18 +1044,8 @@ class TelaPontoVenda:
             else:
                 messagebox.showwarning("Atenção", f"Venda finalizada, mas apenas {itens_gerados_sucesso} de {total_itens} Tickets de Troca foram gerados.", parent=self.janela_pdv)
         
-        '''
-        # Coleta os itens para o resumo da venda
-        self.itens_venda = [self.tvw_produtos.item(item_id)['values'][0] for item_id in self.tvw_produtos.get_children()]
-        
-        # Registra a venda no console (terminal)
-        print("Venda registrada:", {
-            "itens": self.itens_venda,
-            "total": self.total_compra,
-            "pagamentos": self.pagamentos,
-            "desconto": self.desconto_aplicado_info
-        })
-        '''
+        self.itens_venda = [p['nome'] for p in self.produtos_na_venda]
+
         self.tela_resumo_venda()
     
     def tela_resumo_venda(self):
