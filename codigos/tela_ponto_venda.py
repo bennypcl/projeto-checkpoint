@@ -10,13 +10,10 @@ from reportlab.lib.units import cm
 
 #scrollbar || aumentar tamanho da tela
 
-#colocar os botões de voltar/cancelar
-#tirar o "Vendedor: " (deixar só o nome)
-
-
 class TelaPontoVenda:
-    def __init__(self, master):
-        self.master = master # Recebe a janela principal como master
+    def __init__(self, master, lista_de_vendas_global):
+        self.master = master
+        self.lista_de_vendas_global = lista_de_vendas_global # Guarda a referência da lista
         self.janela_pdv = None # Janela Toplevel para o PDV
         self.vendedor_selecionado = None
         self.dados_cliente = {}
@@ -24,7 +21,8 @@ class TelaPontoVenda:
         self.total_compra = 0.0
         self.valor_restante = 0.0
         self.pagamentos = []
-        self.vendedores = ["Andressa", "Nízia", "Vitória"]
+        self.produtos_na_venda = []
+        self.vendedores = ["Gerente", "Alana Silva", "Bárbara Moreira", "Carla Alves", "Troca"]
         self.bandeiras = ["Visa", "MasterCard", "Elo", "Amex"]
 
         self.frame_atual = None
@@ -33,16 +31,22 @@ class TelaPontoVenda:
         self._is_formatting = False # Variável de controle para evitar loops
         self._nome_trace_set = False # Controle para garantir que o trace do nome seja criado só uma vez
         self._produto_trace_set = False # Controle para garantir que o trace do produto seja criado só uma vez
+        self._cpf_trace_set = False # Novo controle para o CPF
+        self._telefone_trace_set = False # Novo controle para o Telefone
         
-        # Apenas criamos as StringVars aqui
         self.cpf_var = tk.StringVar()
-        self.cpf_var.trace_add('write', self.formatar_cpf)
-
         self.telefone_var = tk.StringVar()
-        self.telefone_var.trace_add('write', self.formatar_telefone)
-        
         self.nome_var = tk.StringVar()
         self.produto_var = tk.StringVar()
+
+        # --- Novas Variáveis de Controle para a Tela de Venda ---
+        self.imprimir_ticket_var = tk.BooleanVar(value=False) # Checkbox já vem marcado
+        self.tipo_desconto_var = tk.StringVar(value="%")     # Para os RadioButtons de desconto
+        self.desconto_aplicado_valor = 0.0                   # Guarda o valor do desconto
+        self.desconto_aplicado_info = ""                     # Guarda o texto do desconto
+
+        self._editando_cliente = False
+        self.modo_manipulacao = "adicionar"
 
     def limpar_frame(self):
         if self.frame_atual:
@@ -59,22 +63,33 @@ class TelaPontoVenda:
             self.janela_pdv.lift() # Se já existir, traz para frente
 
     def tela_selecao_vendedor(self):
+        # Limpeza de dados da venda anterior
         self.vendedor_selecionado = None
         self.dados_cliente = {}
         self.produtos = []
         self.total_compra = 0.0
         self.valor_restante = 0.0
         self.pagamentos = []
+        self.produtos_na_venda = []
+        self.imprimir_ticket_var.set(False)
+        self.tipo_desconto_var.set("%")
+        self.desconto_aplicado_valor = 0.0
+        self.desconto_aplicado_info = ""
+        self._editando_cliente = False
+        self.modo_manipulacao = "adicionar"
 
+        # Limpeza das StringVars dos campos de texto
         if hasattr(self, 'cpf_var'):
             self.cpf_var.set("")
-        if hasattr(self, 'nome_var'):
             self.nome_var.set("")
-        if hasattr(self, 'telefone_var'):
             self.telefone_var.set("")
 
+            # O Spinbox do ano pode ser resetado se desejado, mas não é crucial
+            # if hasattr(self, 'spin_ano'):
+            #     self.spin_ano.set("2000")
+
         self.limpar_frame()
-        self.frame_atual = ttk.Frame(self.janela_pdv) # Usar self.janela_pdv
+        self.frame_atual = ttk.Frame(self.janela_pdv)
         self.frame_atual.pack(fill="both", expand=True)
 
         # Container central dentro do frame
@@ -85,19 +100,39 @@ class TelaPontoVenda:
 
         # Conteúdo centralizado
         ttk.Label(container, text="Selecione o Vendedor", font=("Arial", 16)).grid(row=0, column=0, columnspan=2, pady=(0, 10))
-
         self.cmb_vendedor = ttk.Combobox(container, values=self.vendedores, state="readonly")
         self.cmb_vendedor.grid(row=1, column=0, columnspan=2, pady=10)
-
-        ttk.Button(container, text="Avançar", command=self.validar_vendedor).grid(row=2, column=1, padx=5, pady=10)
-
+        ttk.Button(container, text="Avançar", command=self.validar_vendedor).grid(row=2, column=0, columnspan=2, pady=10)
 
     def validar_vendedor(self):
         if not self.cmb_vendedor.get():
             messagebox.showerror("Erro", "Selecione um vendedor para continuar.")
             return
         self.vendedor_selecionado = self.cmb_vendedor.get()
+
+        if self.vendedor_selecionado == "Troca":
+            self.modo_manipulacao = "devolver"
+        else:
+            self.modo_manipulacao = "adicionar"
+
         self.tela_cadastro_cliente()
+
+    def _validar_dia_mes(self, valor_digitado):
+        """Impede a digitação de caracteres não numéricos."""
+        return valor_digitado.isdigit() or valor_digitado == ""
+
+    def _formatar_data_focus_out(self, event, max_val):
+        """Formata o valor com zero à esquerda e valida o limite ao sair do campo."""
+        widget = event.widget
+        texto = widget.get()
+        if texto.isdigit():
+            valor = int(texto)
+            if valor > max_val:
+                widget.set(max_val)
+            elif valor < 1:
+                widget.set(f"{1:02d}")
+            else:
+                widget.set(f"{valor:02d}")
 
     def _formatar_para_maiusculo(self, string_var, entry_widget):
         # Se a função já estiver em execução, não faz nada (evita loop infinito)
@@ -111,10 +146,10 @@ class TelaPontoVenda:
         string_var.set(texto_maiusculo)
         
         # Move o cursor para o final
-        entry_widget.after(1, lambda: entry_widget.icursor(len(texto_maiusculo)))
+        entry_widget.after(1, lambda: entry_widget.icursor(len(texto_maiusculo)) if entry_widget.winfo_exists() else None)
 
         self._is_formatting = False # Avisa que a formatação terminou
-
+    
     def formatar_cpf(self, *args):
         texto = self.cpf_var.get()
         numeros = "".join(filter(str.isdigit, texto))
@@ -134,7 +169,7 @@ class TelaPontoVenda:
         self.cpf_var.trace_remove('write', callback_name)
         self.cpf_var.set(formatado)
         self.cpf_var.trace_add('write', self.formatar_cpf)
-        self.entry_cpf.after(1, lambda: self.entry_cpf.icursor(len(formatado))) #cursor sempre no final
+        self.entry_cpf.after(1, lambda: self.entry_cpf.icursor(len(formatado)) if self.entry_cpf.winfo_exists() else None)
 
     def formatar_telefone(self, *args):
         texto = self.telefone_var.get()
@@ -158,7 +193,7 @@ class TelaPontoVenda:
         self.telefone_var.trace_remove('write', callback_name)
         self.telefone_var.set(formatado)
         self.telefone_var.trace_add('write', self.formatar_telefone)
-        self.entry_telefone.after(1, lambda: self.entry_telefone.icursor(len(formatado)))
+        self.entry_telefone.after(1, lambda: self.entry_telefone.icursor(len(formatado)) if self.entry_telefone.winfo_exists() else None)
 
     def tela_cadastro_cliente(self):
         self.limpar_frame()
@@ -172,58 +207,74 @@ class TelaPontoVenda:
         container = ttk.Frame(self.frame_atual)
         container.grid(row=0, column=0)
 
-        ttk.Label(container, text=f"Vendedor: {self.vendedor_selecionado}", font=("Arial", 10, "italic")).grid(
+        ttk.Label(container, text=f"{self.vendedor_selecionado}", font=("Arial", 10, "italic")).grid(
             row=0, column=0, columnspan=2, pady=(0, 20), sticky="w")
 
         ttk.Label(container, text="Cadastro do Cliente", font=("Arial", 16, "bold")).grid(
             row=1, column=0, columnspan=2, pady=(0, 15))
 
-        # Campos do Formulário CONECTADOS às StringVars
+        # Campo CPF
         ttk.Label(container, text="CPF:").grid(row=2, column=0, padx=5, pady=8, sticky="e")
-        # Conecta o campo de CPF à self.cpf_var
         self.entry_cpf = ttk.Entry(container, width=30, textvariable=self.cpf_var)
         self.entry_cpf.grid(row=2, column=1, padx=5, pady=8)
         self.entry_cpf.focus_set()
 
+        # Ativa o trace para o CPF (LUGAR CORRETO)
+        if not self._cpf_trace_set:
+            self.cpf_var.trace_add('write', self.formatar_cpf)
+            self._cpf_trace_set = True
+
+        # Campo Nome
         ttk.Label(container, text="Nome:").grid(row=3, column=0, padx=5, pady=8, sticky="e")
-        # Conecta o campo de Nome à self.nome_var
         self.entry_nome = ttk.Entry(container, width=30, textvariable=self.nome_var)
         self.entry_nome.grid(row=3, column=1, padx=5, pady=8)
 
-        # Ativa o trace para o nome do cliente APENAS UMA VEZ
+        # Ativa o trace para o Nome (LUGAR CORRETO)
         if not self._nome_trace_set:
             self.nome_var.trace_add('write', 
                 lambda *args: self._formatar_para_maiusculo(self.nome_var, self.entry_nome))
             self._nome_trace_set = True
 
+        # Campo Telefone
         ttk.Label(container, text="Telefone:").grid(row=4, column=0, padx=5, pady=8, sticky="e")
-        # Conecta o campo de Telefone à self.telefone_var
         self.entry_telefone = ttk.Entry(container, width=30, textvariable=self.telefone_var)
         self.entry_telefone.grid(row=4, column=1, padx=5, pady=8)
 
+        # Ativa o trace para o Telefone (LUGAR CORRETO)
+        if not self._telefone_trace_set:
+            self.telefone_var.trace_add('write', self.formatar_telefone)
+            self._telefone_trace_set = True
+
         # Campos de Data de Nascimento com Spinbox
-        # (Não precisam de validação extra, pois já são numéricos por natureza)
         ttk.Label(container, text="Data de Nascimento:").grid(row=5, column=0, padx=5, pady=8, sticky="e")
         
         frame_nascimento = ttk.Frame(container)
         frame_nascimento.grid(row=5, column=1, padx=5, pady=8, sticky="w")
         
-        self.spin_dia = ttk.Spinbox(frame_nascimento, from_=1, to=31, width=4)
-        self.spin_dia.pack(side="left", padx=(0, 5))
-        
-        self.spin_mes = ttk.Spinbox(frame_nascimento, from_=1, to=12, width=4)
-        self.spin_mes.pack(side="left", padx=5)
+        # Registra a função de validação
+        vcmd = (self.janela_pdv.register(self._validar_dia_mes), '%P')
 
+        # Spinbox para o Dia, com nova validação e formatação
+        self.spin_dia = ttk.Spinbox(frame_nascimento, from_=1, to=31, width=4,
+                                    validate='key', validatecommand=vcmd)
+        self.spin_dia.pack(side="left", padx=(0, 5))
+        self.spin_dia.bind("<FocusOut>", lambda e: self._formatar_data_focus_out(e, 31))
+        
+        # Spinbox para o Mês, com nova validação e formatação
+        self.spin_mes = ttk.Spinbox(frame_nascimento, from_=1, to=12, width=4,
+                                    validate='key', validatecommand=vcmd)
+        self.spin_mes.pack(side="left", padx=5)
+        self.spin_mes.bind("<FocusOut>", lambda e: self._formatar_data_focus_out(e, 12))
+
+        # Spinbox para o Ano (não precisa de validação extra)
         self.spin_ano = ttk.Spinbox(frame_nascimento, from_=1920, to=2024, width=6)
         self.spin_ano.pack(side="left")
 
         # Frame para os botões de ação
         frame_botoes = ttk.Frame(container)
         frame_botoes.grid(row=6, column=0, columnspan=2, pady=(20, 0))
-
-        btn_voltar = ttk.Button(frame_botoes, text="Voltar", command=self.tela_selecao_vendedor)
+        btn_voltar = ttk.Button(frame_botoes, text="Voltar", command=self.voltar_do_cadastro_cliente, bootstyle=(SECONDARY, OUTLINE))
         btn_voltar.pack(side="left", padx=10)
-
         btn_continuar = ttk.Button(frame_botoes, text="Continuar", command=self.verificar_dados_cliente)
         btn_continuar.pack(side="left", padx=10)
 
@@ -257,23 +308,138 @@ class TelaPontoVenda:
         if not self.validar_campos_cliente():
             return
         
-        # Pega os valores dos 3 Spinboxes de data
         dia = self.spin_dia.get()
         mes = self.spin_mes.get()
         ano = self.spin_ano.get()
         
-        # Verifica se a data foi preenchida antes de formatar
         data_nascimento_formatada = ""
         if dia and mes and ano:
+            # A formatação automática garante que dia e mês já terão 2 dígitos
             data_nascimento_formatada = f"{dia}/{mes}/{ano}"
 
+        # Lendo todos os dados a partir das StringVars para consistência
         self.dados_cliente = {
-            "cpf": self.entry_cpf.get(),
-            "nome": self.entry_nome.get(),
-            "telefone": self.entry_telefone.get(),
+            "cpf": self.cpf_var.get(),
+            "nome": self.nome_var.get(),
+            "telefone": self.telefone_var.get(),
             "nascimento": data_nascimento_formatada
         }
         self.tela_venda()
+
+    def aplicar_desconto(self):
+        if self.desconto_aplicado_valor > 0:
+            messagebox.showwarning("Atenção", "Um desconto já foi aplicado a esta venda.", parent=self.janela_pdv)
+            return
+
+        tipo = self.tipo_desconto_var.get()
+        try:
+            valor_desconto_str = self.entry_desconto.get().replace(",", ".")
+            valor_desconto = float(valor_desconto_str)
+        except ValueError:
+            messagebox.showerror("Erro", "Valor de desconto inválido.", parent=self.janela_pdv)
+            return
+
+        if valor_desconto <= 0:
+            messagebox.showerror("Erro", "O valor do desconto deve ser maior que zero.", parent=self.janela_pdv)
+            return
+
+        total_original = self.total_compra
+        
+        if tipo == "%":
+            if valor_desconto > 100:
+                messagebox.showerror("Erro", "O desconto em porcentagem não pode ser maior que 100%.", parent=self.janela_pdv)
+                return
+            self.desconto_aplicado_valor = total_original * (valor_desconto / 100)
+            self.desconto_aplicado_info = f"{valor_desconto}%"
+        else: # tipo == "R$"
+            if valor_desconto > total_original:
+                messagebox.showerror("Erro", "O desconto em valor não pode ser maior que o total da compra.", parent=self.janela_pdv)
+                return
+            self.desconto_aplicado_valor = valor_desconto
+            self.desconto_aplicado_info = f"R$ {valor_desconto:.2f}"
+            
+        # Atualiza os totais e a tela
+        self.atualizar_total()
+
+        # Desativa os campos de desconto para evitar múltiplos descontos
+        self.entry_desconto.config(state="disabled")
+        self.btn_aplicar_desconto.config(state="disabled")
+
+    def editar_cliente(self):
+        """Prepara para editar/adicionar um cliente e navega para a tela de cadastro."""
+        self._editando_cliente = True
+
+        # PASSO 1: Navega para a tela e CRIA os novos widgets
+        self.tela_cadastro_cliente()
+
+        # PASSO 2: AGORA que os widgets da tela de cadastro já existem, nós os preenchemos
+        if self.dados_cliente:
+            # Preenche os campos de texto
+            self.cpf_var.set(self.dados_cliente.get("cpf", ""))
+            self.nome_var.set(self.dados_cliente.get("nome", ""))
+            self.telefone_var.set(self.dados_cliente.get("telefone", ""))
+            
+            # Preenche os campos de data de nascimento
+            data_nasc_str = self.dados_cliente.get("nascimento", "")
+            if data_nasc_str:
+                try:
+                    dia, mes, ano = data_nasc_str.split('/')
+                    # Define o valor diretamente nos widgets
+                    self.spin_dia.set(dia)
+                    self.spin_mes.set(mes)
+                    self.spin_ano.set(ano)
+                except (ValueError, AttributeError):
+                    print(f"Aviso: Formato de data inválido em dados_cliente: {data_nasc_str}")
+
+    def voltar_do_cadastro_cliente(self):
+        """Decide para qual tela voltar com base no modo de edição."""
+        if self._editando_cliente:
+            self.tela_venda() # Se estava editando, volta para a venda
+        else:
+            self.tela_selecao_vendedor() # Se era um novo cadastro, volta para o início
+
+    def _atualizar_estilo_botoes_modo(self):
+        """Muda a aparência dos botões para indicar o modo ativo."""
+        # Define o estilo padrão (contorno) para todos
+        self.btn_adicionar.config(bootstyle=OUTLINE)
+        self.btn_remover_por_nome.config(bootstyle=OUTLINE)
+        self.btn_devolver.config(bootstyle=OUTLINE)
+
+        # Define o estilo sólido para o botão do modo ativo
+        if self.modo_manipulacao == "adicionar":
+            self.btn_adicionar.config(bootstyle=PRIMARY)
+        elif self.modo_manipulacao == "remover":
+            self.btn_remover_por_nome.config(bootstyle=PRIMARY)
+        elif self.modo_manipulacao == "devolver":
+            self.btn_devolver.config(bootstyle=PRIMARY)
+
+    def set_modo_adicionar(self):
+        self.modo_manipulacao = "adicionar"
+        self._atualizar_estilo_botoes_modo()
+        self.entry_produto.focus_set()
+
+    def set_modo_remover(self):
+        self.modo_manipulacao = "remover"
+        self._atualizar_estilo_botoes_modo()
+        self.entry_produto.focus_set()
+
+    def set_modo_devolver(self):
+        # Apenas permite o modo de devolução se o vendedor for "Troca"
+        if self.vendedor_selecionado == "Troca":
+            self.modo_manipulacao = "devolver"
+            self._atualizar_estilo_botoes_modo()
+            self.entry_produto.focus_set()
+        else:
+            messagebox.showwarning("Acesso Negado", "Apenas o vendedor 'Troca' pode processar devoluções.", parent=self.janela_pdv)
+
+    def processar_produto_entry(self):
+        """Executa a ação correta com base no modo de manipulação ativo."""
+        if self.modo_manipulacao == "adicionar":
+            self.adicionar_produto()
+        elif self.modo_manipulacao == "remover":
+            self.remover_produto()
+        elif self.modo_manipulacao == "devolver":
+            self.devolver_produto()
 
     def tela_venda(self):
         self.limpar_frame()
@@ -291,36 +457,70 @@ class TelaPontoVenda:
         container_direita.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
 
         # --- PAINEL ESQUERDO: PRODUTOS E TOTAL ---
-        container_esquerda.rowconfigure(1, weight=1) # Faz a lista de produtos expandir
+        container_esquerda.rowconfigure(2, weight=1) # A lista de produtos agora está na linha 2
         container_esquerda.columnconfigure(0, weight=1)
 
-        # Seção de Adicionar Produto
-        frame_add_produto = ttk.Frame(container_esquerda)
-        frame_add_produto.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        frame_add_produto.columnconfigure(1, weight=1)
+        # Seção de Informações do Cliente
+        frame_cliente_info = ttk.LabelFrame(container_esquerda, text="Dados do Cliente")
+        frame_cliente_info.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        frame_cliente_info.columnconfigure(0, weight=1)
+
+        # Verifica se um cliente já foi cadastrado para esta venda
+        if self.dados_cliente and self.dados_cliente.get("cpf"):
+            # Se sim, mostra os dados e o botão de editar
+            info_cliente = f"Nome: {self.dados_cliente.get('nome', '')}\nCPF: {self.dados_cliente.get('cpf', '')}"
+            ttk.Label(frame_cliente_info, text=info_cliente, justify="left").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+            
+            btn_editar_cliente = ttk.Button(frame_cliente_info, text="Editar", command=self.editar_cliente)
+            btn_editar_cliente.grid(row=0, column=1, sticky="e", padx=5, pady=5)
+        else:
+            # Se não, mostra apenas o botão para cadastrar
+            btn_cadastrar_cliente = ttk.Button(frame_cliente_info, text="Cadastrar Cliente", command=self.editar_cliente)
+            btn_cadastrar_cliente.grid(row=0, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+
+        # NOVO: Frame para os botões e entrada de produto
+        frame_manipula_produto = ttk.LabelFrame(container_esquerda, text="Manipular Produtos")
+        frame_manipula_produto.grid(row=1, column=0, sticky="ew", pady=(0,10))
+        frame_manipula_produto.columnconfigure(0, weight=1)
+
+        # Frame para os botões de ação do produto
+        frame_botoes_produto = ttk.Frame(frame_manipula_produto)
+        frame_botoes_produto.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        frame_botoes_produto.columnconfigure((0,1,2), weight=1)
+
+        self.btn_adicionar = ttk.Button(frame_botoes_produto, text="Adicionar", command=self.set_modo_adicionar)
+        self.btn_adicionar.grid(row=0, column=0, sticky="ew", padx=2)
         
-        ttk.Label(frame_add_produto, text="Produto:").grid(row=0, column=0, padx=(0, 5))
-        self.entry_produto = ttk.Entry(frame_add_produto, textvariable=self.produto_var)
+        self.btn_remover_por_nome = ttk.Button(frame_botoes_produto, text="Remover", command=self.set_modo_remover)
+        self.btn_remover_por_nome.grid(row=0, column=1, sticky="ew", padx=2)
+
+        estado_devolver = "normal" if self.vendedor_selecionado == "Troca" else "disabled"
+        self.btn_devolver = ttk.Button(frame_botoes_produto, text="Devolver", command=self.set_modo_devolver, state=estado_devolver)
+        self.btn_devolver.grid(row=0, column=2, sticky="ew", padx=2)
+        
+        # Frame para a entrada do produto
+        frame_entry_produto = ttk.Frame(frame_manipula_produto)
+        frame_entry_produto.grid(row=1, column=0, sticky="ew", padx=5, pady=(0,5))
+        frame_entry_produto.columnconfigure(1, weight=1)
+        
+        ttk.Label(frame_entry_produto, text="Produto:").grid(row=0, column=0, padx=(0, 5))
+        self.entry_produto = ttk.Entry(frame_entry_produto, textvariable=self.produto_var)
         self.entry_produto.grid(row=0, column=1, sticky="ew")
         self.entry_produto.focus_set()
-        self.entry_produto.bind("<Return>", self.adicionar_produto_event)
-
-        # Ativa o trace para o nome do produto APENAS UMA VEZ
+        # A tecla Enter agora chama a função central de processamento
+        self.entry_produto.bind("<Return>", self.processar_produto_event) 
         if not self._produto_trace_set:
-            self.produto_var.trace_add('write', 
-                lambda *args: self._formatar_para_maiusculo(self.produto_var, self.entry_produto))
+            self.produto_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(self.produto_var, self.entry_produto))
             self._produto_trace_set = True
 
-        self.btn_adicionar = ttk.Button(frame_add_produto, text="Adicionar", command=self.adicionar_produto)
-        self.btn_adicionar.grid(row=0, column=2, padx=(5, 0))
-
-        # Seção da Lista de Produtos (usando Treeview para um visual melhor)
+        # Chama a função para definir o estilo inicial dos botões
+        self._atualizar_estilo_botoes_modo()
+        
+        # Seção da Lista de Produtos (agora na linha 2)
         frame_lista_produtos = ttk.Frame(container_esquerda)
-        frame_lista_produtos.grid(row=1, column=0, sticky="nsew")
+        frame_lista_produtos.grid(row=2, column=0, sticky="nsew")
         frame_lista_produtos.rowconfigure(0, weight=1)
         frame_lista_produtos.columnconfigure(0, weight=1)
-
-        # ADICIONAMOS 'codigo' e 'tamanho' mas vamos exibi-los
         colunas = ('produto', 'codigo', 'tamanho', 'preco')
         self.tvw_produtos = ttk.Treeview(frame_lista_produtos, columns=colunas, show='headings')
         self.tvw_produtos.heading('produto', text='Produto')
@@ -329,108 +529,219 @@ class TelaPontoVenda:
         self.tvw_produtos.heading('preco', text='Preço')
         self.tvw_produtos.column('preco', width=80, anchor="e")
         self.tvw_produtos.grid(row=0, column=0, sticky="nsew")
-        
-        # Scrollbar para a lista de produtos
         scrollbar = ttk.Scrollbar(frame_lista_produtos, orient="vertical", command=self.tvw_produtos.yview)
         self.tvw_produtos.configure(yscrollcommand=scrollbar.set)
         scrollbar.grid(row=0, column=1, sticky="ns")
-
+        
         self.btn_remover = ttk.Button(container_esquerda, text="Remover Produto Selecionado", command=self.remover_produto)
-        self.btn_remover.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        self.btn_remover.grid(row=3, column=0, sticky="ew", pady=(10, 0))
 
         # Seção de Totais
         frame_totais = ttk.Frame(container_esquerda)
-        frame_totais.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        frame_totais.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         frame_totais.columnconfigure(1, weight=1)
         
-        ttk.Label(frame_totais, text="Total da Compra:", font=("Arial", 14, "bold")).grid(row=0, column=0, sticky="w")
-        self.total_label = ttk.Label(frame_totais, text="R$ 0.00", font=("Arial", 14, "bold"))
-        self.total_label.grid(row=0, column=1, sticky="e")
+        ttk.Label(frame_totais, text="Subtotal:").grid(row=0, column=0, sticky="w")
+        self.subtotal_label = ttk.Label(frame_totais, text="R$ 0.00")
+        self.subtotal_label.grid(row=0, column=1, sticky="e")
+        
+        ttk.Label(frame_totais, text="Desconto:").grid(row=1, column=0, sticky="w")
+        self.desconto_label = ttk.Label(frame_totais, text="R$ 0.00")
+        self.desconto_label.grid(row=1, column=1, sticky="e")
 
-        # --- PAINEL DIREITO: PAGAMENTOS E AÇÕES (VERSÃO AJUSTADA) ---
+        ttk.Label(frame_totais, text="Total da Compra:", font=("Arial", 14, "bold")).grid(row=2, column=0, sticky="w", pady=(5,0))
+        self.total_label = ttk.Label(frame_totais, text="R$ 0.00", font=("Arial", 14, "bold"))
+        self.total_label.grid(row=2, column=1, sticky="e", pady=(5,0))
+
+        # --- PAINEL DIREITO: PAGAMENTOS E AÇÕES ---
         container_direita.columnconfigure(0, weight=1)
-        container_direita.rowconfigure(2, weight=1) # Faz o resumo de pagamentos expandir
+        container_direita.rowconfigure(3, weight=1) # Ajusta o peso para o novo frame
+        
+        ttk.Label(container_direita, text=f"{self.vendedor_selecionado}", font=("Arial", 9, "italic")).grid(row=0, column=0, sticky="w")
 
         # Seção de Entrada de Valor e Formas de Pagamento
-        ttk.Label(container_direita, text="Valor a Pagar:", font=("Arial", 12)).grid(row=0, column=0, sticky="w", pady=(0,5))
+        ttk.Label(container_direita, text="Valor a Pagar:", font=("Arial", 12)).grid(row=1, column=0, sticky="w", pady=(10,5))
         self.valor_editavel = ttk.Entry(container_direita, font=("Arial", 14), justify="right")
-        self.valor_editavel.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        self.valor_editavel.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         self.valor_editavel.insert(0, "0.00")
+        self.valor_editavel.bind("<FocusIn>", lambda event: self.valor_editavel.icursor(tk.END))
         
         frame_formas_pagamento = ttk.Frame(container_direita)
-        frame_formas_pagamento.grid(row=2, column=0, sticky="nsew")
+        frame_formas_pagamento.grid(row=3, column=0, sticky="new")
         frame_formas_pagamento.columnconfigure((0, 1), weight=1)
-
         ttk.Button(frame_formas_pagamento, text="Dinheiro", command=self.pagamento_dinheiro).grid(row=0, column=0, sticky="ew", padx=2, pady=2)
         ttk.Button(frame_formas_pagamento, text="Débito", command=self.pagamento_debito).grid(row=0, column=1, sticky="ew", padx=2, pady=2)
         ttk.Button(frame_formas_pagamento, text="Crédito", command=self.pagamento_credito).grid(row=1, column=0, sticky="ew", padx=2, pady=2)
         ttk.Button(frame_formas_pagamento, text="Pix", command=self.pagamento_pix).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
 
+        # Frame de Desconto
+        frame_desconto = ttk.LabelFrame(container_direita, text="Aplicar Desconto")
+        frame_desconto.grid(row=4, column=0, sticky="ew", pady=10)
+        frame_desconto.columnconfigure(1, weight=1)
+
+        # Atribuindo os RadioButtons a variáveis para poder desabilitá-los
+        self.radio_pct = ttk.Radiobutton(frame_desconto, text="%", variable=self.tipo_desconto_var, value="%")
+        self.radio_pct.grid(row=0, column=0, sticky="w", padx=10, pady=(2,0))
+        
+        self.radio_rs = ttk.Radiobutton(frame_desconto, text="R$", variable=self.tipo_desconto_var, value="R$")
+        self.radio_rs.grid(row=1, column=0, sticky="w", padx=10, pady=(0,2))
+
+        self.entry_desconto = ttk.Entry(frame_desconto)
+        self.entry_desconto.grid(row=0, column=1, sticky="ew", padx=5, pady=5, rowspan=2)
+        
+        self.btn_aplicar_desconto = ttk.Button(frame_desconto, text="Aplicar", command=self.aplicar_desconto)
+        self.btn_aplicar_desconto.grid(row=0, column=2, sticky="ew", padx=(0,5), pady=5, rowspan=2)
+
+        self.btn_limpar_desconto = ttk.Button(frame_desconto, text="Limpar", command=self.limpar_desconto, bootstyle=(SECONDARY, OUTLINE))
+        self.btn_limpar_desconto.grid(row=0, column=3, sticky="ew", padx=(0,5), pady=5, rowspan=2)
+
+        if self.vendedor_selecionado == "Troca":
+            # Desabilita todos os widgets dentro do frame de desconto
+            self.radio_pct.config(state="disabled")
+            self.radio_rs.config(state="disabled")
+            self.entry_desconto.config(state="disabled")
+            self.btn_aplicar_desconto.config(state="disabled")
+            self.btn_limpar_desconto.config(state="disabled")
+
         # Seção de Resumo de Pagamentos
         frame_resumo_pagamentos = ttk.Frame(container_direita)
-        frame_resumo_pagamentos.grid(row=3, column=0, sticky="ew", pady=(10,5))
+        frame_resumo_pagamentos.grid(row=5, column=0, sticky="ew", pady=(10,5))
         frame_resumo_pagamentos.columnconfigure(0, weight=1)
-        
         ttk.Label(frame_resumo_pagamentos, text="Pagamentos Realizados:").grid(row=0, column=0, sticky="w")
         self.lista_pagamentos = tk.Listbox(frame_resumo_pagamentos, height=4)
         self.lista_pagamentos.grid(row=1, column=0, sticky="ew")
-
-        # 1: Botão "Limpar Pagamentos" movido para baixo da lista
-        ttk.Button(frame_resumo_pagamentos, text="Limpar Pagamentos", command=self.limpar_pagamentos, bootstyle=(WARNING, OUTLINE)).grid(row=2, column=0, sticky="ew", pady=(5,0))
-        
-        # 3: Cor do troco alterada para azul (bootstyle="info")
+        ttk.Button(frame_resumo_pagamentos, text="Limpar Pagamentos", command=self.limpar_pagamentos, bootstyle=(SECONDARY, OUTLINE)).grid(row=2, column=0, sticky="ew", pady=(5,0))
         self.label_troco = ttk.Label(frame_resumo_pagamentos, text="", bootstyle="info", font=("Arial", 12, "bold"))
         self.label_troco.grid(row=3, column=0, sticky="e", pady=(5,0))
         
+        # Opções com Checkbox
+        frame_opcoes_finais = ttk.Frame(container_direita)
+        frame_opcoes_finais.grid(row=6, column=0, sticky="ew", pady=5)
+        
+        chk_imprimir = ttk.Checkbutton(frame_opcoes_finais, text="Imprimir Ticket de Troca", variable=self.imprimir_ticket_var)
+        chk_imprimir.pack()
+
         # Seção de Ações Finais
         frame_acoes = ttk.Frame(container_direita)
-        frame_acoes.grid(row=4, column=0, sticky="ew", pady=(20, 0))
-        # 2: Configura 2 colunas de mesmo peso para os botões lado a lado
+        frame_acoes.grid(row=7, column=0, sticky="ew", pady=(10, 0))
         frame_acoes.columnconfigure((0, 1), weight=1)
-
-        ttk.Button(frame_acoes, text="Voltar (Cancelar Venda)", command=self.tela_selecao_vendedor, bootstyle=SECONDARY).grid(row=0, column=0, sticky="ew", padx=(0, 5), ipady=10)
-
+        ttk.Button(frame_acoes, text="CANCELAR VENDA", command=self.tela_selecao_vendedor, bootstyle=SECONDARY).grid(row=0, column=0, sticky="ew", padx=(0, 5), ipady=10)
         self.btn_finalizar = ttk.Button(frame_acoes, text="FINALIZAR VENDA", command=self.finalizar_venda)
         self.btn_finalizar.grid(row=0, column=1, sticky="ew", padx=(5, 0), ipady=10)
 
+        # Garante que, ao voltar da edição do cliente, o estado da venda seja reaplicado na tela.
+
+        # 1. Re-exibe os produtos que já estão na memória
+        self.exibir_produtos()
+
+        # 2. Re-exibe os pagamentos que já foram feitos
+        self.exibir_pagamentos()
+
+        # 3. RECALCULA E ATUALIZA TODOS OS TOTAIS E O VALOR A PAGAR
+        self.atualizar_total()
+
+        # 4. Se já houver pagamentos, desativa novamente o campo de desconto
+        if self.pagamentos:
+            self.entry_desconto.config(state="disabled")
+            self.btn_aplicar_desconto.config(state="disabled")
+
     def atualizar_total(self):
+        # O subtotal é o valor bruto dos produtos
+        subtotal = 0.0
+        for item_id in self.tvw_produtos.get_children():
+            preco_str = self.tvw_produtos.item(item_id)['values'][3]
+            subtotal += float(preco_str)
+        
+        # O total da compra agora é o subtotal menos o desconto
+        self.total_compra = subtotal - self.desconto_aplicado_valor
+
+        # Atualiza os labels na tela
+        self.subtotal_label.config(text=f"R$ {subtotal:.2f}")
+        self.desconto_label.config(text=f"- R$ {self.desconto_aplicado_valor:.2f} ({self.desconto_aplicado_info})")
         self.total_label.config(text=f"R$ {self.total_compra:.2f}")
-        self.valor_restante = self.total_compra
+
+        # Recalcula o valor restante com base nos pagamentos já feitos
+        total_pago = sum(valor for forma, valor in self.pagamentos)
+        self.valor_restante = self.total_compra - total_pago
+        
         self.valor_editavel.delete(0, tk.END)
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
 
     def adicionar_produto(self):
-        produto_nome = self.entry_produto.get()
+        produto_nome = self.produto_var.get()
         if produto_nome:
-            preco = 10.00 # Preço fixo para exemplo
+            preco = 10.00
             
-            # SIMULAÇÃO de código e tamanho
-            codigo_simulado = f"SKU-{len(self.tvw_produtos.get_children()) + 100}"
-            tamanho_simulado = "M"
-
-            # Inserimos os 4 valores no Treeview
-            self.tvw_produtos.insert('', tk.END, values=(produto_nome, codigo_simulado, tamanho_simulado, f"{preco:.2f}"))
+            # Cria um dicionário para o produto
+            novo_produto = {
+                'nome': produto_nome,
+                'codigo': f"SKU-{len(self.produtos_na_venda) + 100}",
+                'tamanho': "M",
+                'preco': preco
+            }
             
-            self.total_compra += preco
+            # Adiciona o dicionário à nossa lista em memória
+            self.produtos_na_venda.append(novo_produto)
+            
+            # Atualiza a tela
+            self.exibir_produtos()
             self.atualizar_total()
-            self.entry_produto.delete(0, tk.END)
+            self.produto_var.set("")
     
-    def adicionar_produto_event(self, event=None):
-        """Função chamada pelo evento da tecla Enter para evitar problemas com argumentos."""
-        self.adicionar_produto()
+    def processar_produto_event(self, event=None):
+        """Função chamada pelo evento da tecla Enter para executar a ação do modo atual."""
+        self.processar_produto_entry()
 
     def remover_produto(self):
-        selecionado = self.tvw_produtos.selection()
-        if selecionado:
-            item = self.tvw_produtos.item(selecionado[0])
-            # O preço agora é o quarto item (índice 3)
-            preco_str = item['values'][3] 
-            preco = float(preco_str)
+        """Remove um produto da venda pelo nome digitado no campo de produto."""
+        produto_nome_para_remover = self.produto_var.get()
+        if not produto_nome_para_remover:
+            messagebox.showwarning("Atenção", "Digite o nome do produto a ser removido da venda.", parent=self.janela_pdv)
+            return
+
+        # Procura o produto na lista
+        produto_encontrado = None
+        for produto in self.produtos_na_venda:
+            if produto['nome'].upper() == produto_nome_para_remover.upper():
+                produto_encontrado = produto
+                break
+        
+        if produto_encontrado:
+            self.produtos_na_venda.remove(produto_encontrado)
+        else:
+            messagebox.showerror("Erro", f"Produto '{produto_nome_para_remover}' não encontrado na venda.", parent=self.janela_pdv)
             
-            self.total_compra -= preco
-            self.tvw_produtos.delete(selecionado[0])
-            self.atualizar_total()
-            self.limpar_pagamentos()
+        # Atualiza a tela
+        self.exibir_produtos()
+        self.atualizar_total()
+        self.produto_var.set("")
+
+    def devolver_produto(self):
+        """Adiciona um produto como devolução, gerando um crédito (pagamento negativo)."""
+        produto_nome = self.produto_var.get()
+        if not produto_nome:
+            messagebox.showwarning("Atenção", "Digite o nome do produto a ser devolvido.", parent=self.janela_pdv)
+            return
+
+        preco = 10.00 # Usando o mesmo preço fixo para o crédito
+        
+        # Cria o dicionário do produto devolvido com preço negativo
+        produto_devolvido = {
+            'nome': f"[DEVOLUÇÃO] {produto_nome}",
+            'codigo': "TROCA",
+            'tamanho': "-",
+            'preco': -preco # O preço é negativo para abater do subtotal
+        }
+        
+        self.produtos_na_venda.append(produto_devolvido)
+        
+        # REMOVIDO: A linha que registrava um pagamento negativo foi removida.
+        # A devolução agora afeta apenas o subtotal, que é a forma correta.
+        
+        # Apenas atualizamos a tela
+        self.exibir_produtos()
+        self.atualizar_total() # Esta função irá recalcular tudo corretamente
+        self.produto_var.set("")
 
     def obter_valor_restante(self):
         try:
@@ -448,6 +759,23 @@ class TelaPontoVenda:
         self.valor_editavel.delete(0, tk.END)
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
 
+        if hasattr(self, 'entry_desconto'):
+            self.entry_desconto.config(state="disabled")
+            self.btn_aplicar_desconto.config(state="disabled")
+
+    def exibir_produtos(self):
+        # Limpa o treeview antes de preencher
+        for i in self.tvw_produtos.get_children():
+            self.tvw_produtos.delete(i)
+        
+        # Preenche o treeview com os dados da nossa lista em memória
+        for produto in self.produtos_na_venda:
+            self.tvw_produtos.insert('', tk.END, values=(
+                produto['nome'],
+                produto['codigo'],
+                produto['tamanho'],
+                f"{produto['preco']:.2f}"
+            ))
 
     def exibir_pagamentos(self):
         self.lista_pagamentos.delete(0, tk.END) # Limpa a lista antes de adicionar
@@ -465,6 +793,25 @@ class TelaPontoVenda:
         self.exibir_pagamentos()
         self.label_troco.config(text="")
 
+        if self.desconto_aplicado_valor == 0 and hasattr(self, 'entry_desconto'):
+            self.entry_desconto.config(state="normal")
+            self.btn_aplicar_desconto.config(state="normal")
+    
+    def limpar_desconto(self):
+        # Só faz algo se um desconto estiver ativo
+        if self.desconto_aplicado_valor > 0:
+            self.desconto_aplicado_valor = 0.0
+            self.desconto_aplicado_info = ""
+            
+            # Recalcula o total e atualiza a tela
+            self.atualizar_total()
+            
+            # SÓ reativa os campos se NENHUM pagamento foi feito
+            if not self.pagamentos:
+                self.entry_desconto.config(state="normal")
+                self.entry_desconto.delete(0, tk.END)
+                self.btn_aplicar_desconto.config(state="normal")
+            
     def calcular_troco(self, valor_pago, valor_restante):
         troco = valor_pago - valor_restante
 
@@ -479,7 +826,6 @@ class TelaPontoVenda:
         
         # Comando para forçar a atualização visual da janela do PDV
         self.janela_pdv.update_idletasks()
-
 
     def pagamento_dinheiro(self):
         valor_str = self.valor_editavel.get()
@@ -502,7 +848,6 @@ class TelaPontoVenda:
         else:
             self.label_troco.config(text="")
             self.registrar_pagamento("Dinheiro", valor_pago)
-
 
     def pagamento_debito(self):
         # 1. Pega e valida o valor ANTES de abrir a nova janela
@@ -619,7 +964,7 @@ class TelaPontoVenda:
             espaco_entre_linhas = 0.5*cm
             espaco_entre_blocos = 1*cm
 
-            # Bloco do Produto (continua igual)
+            # Bloco do Produto
             c.setFont("Helvetica-Bold", 8)
             c.drawString(0.5*cm, posicao_y_atual, "Produto")
             posicao_y_atual -= espaco_entre_linhas
@@ -638,8 +983,10 @@ class TelaPontoVenda:
             c.setFont("Helvetica", 8)
             c.drawString(0.5*cm, posicao_y_atual, item_para_troca['codigo'])
             c.drawString(3.5*cm, posicao_y_atual, item_para_troca['tamanho'])
-            # --- FIM DO NOVO BLOCO ---
 
+            c.line(0.5*cm, 1.4*cm, largura_recibo - 0.5*cm, 1.4*cm)
+            c.setFont("Helvetica-Oblique", 7)
+            c.drawCentredString(largura_recibo / 2.0, 0.9*cm, "NÃO É DOCUMENTO FISCAL")
             c.setFont("Helvetica-Oblique", 7)
             c.drawCentredString(largura_recibo / 2.0, 0.5*cm, "Válido para trocas em até 30 dias da data da compra.")
 
@@ -651,52 +998,68 @@ class TelaPontoVenda:
             return False
 
     def finalizar_venda(self):
-        if self.total_compra <= 0 or not self.tvw_produtos.get_children():
+        if self.total_compra < 0 or not self.produtos_na_venda:
             messagebox.showwarning("Venda inválida", "Nenhum produto adicionado.", parent=self.janela_pdv)
             return
 
-        if self.valor_restante > 0:
+        if self.valor_restante > 0.009: 
             messagebox.showerror("Erro", "Ainda há valor pendente de pagamento.", parent=self.janela_pdv)
             return
 
-        # Pega a data UMA VEZ antes do loop
-        data_atual = datetime.now().strftime("%d/%m/%Y")
+        # Monta um dicionário completo com os dados da venda
+        dados_da_venda = {
+            "id": int(datetime.now().timestamp()), # ID único baseado na hora atual
+            "vendedor": self.vendedor_selecionado,
+            "cliente": self.dados_cliente,
+            "total": self.total_compra,
+            "produtos": [p['nome'] for p in self.produtos_na_venda], # Pega só os nomes
+            "pagamentos": self.pagamentos,
+            "data": datetime.now().strftime("%d/%m/%Y %H:%M")
+        }
         
-        itens_gerados_sucesso = 0
-        total_itens = len(self.tvw_produtos.get_children())
+        # A MÁGICA ACONTECE AQUI: Adiciona a venda à lista central
+        self.lista_de_vendas_global.append(dados_da_venda)
+        
+        print("Venda registrada com sucesso:", dados_da_venda)
 
-        # Loop para gerar um PDF para cada item na lista
-        for item_id in self.tvw_produtos.get_children():
-            valores = self.tvw_produtos.item(item_id)['values']
-            item_info = {
-                'nome': valores[0],
-                'codigo': valores[1],
-                'tamanho': valores[2]
-            }
+        # 1. VERIFICA O CHECKBOX "Imprimir Ticket de Troca" AQUI
+        if self.imprimir_ticket_var.get():
             
-            # Chama a função de gerar PDF para o item atual
-            if self.gerar_ticket_troca_pdf(item_info, self.vendedor_selecionado, data_atual):
-                itens_gerados_sucesso += 1
+            # Se o checkbox estiver marcado, ENTRA NESTE BLOCO para gerar os PDFs
+            data_atual = datetime.now().strftime("%d/%m/%Y")
+            itens_gerados_sucesso = 0
+            total_itens = len(self.tvw_produtos.get_children())
 
-        # Mostra UMA ÚNICA mensagem de resumo no final
-        if itens_gerados_sucesso == total_itens:
-            messagebox.showinfo("Sucesso", f"{itens_gerados_sucesso} Ticket(s) de Troca gerados com sucesso!", parent=self.janela_pdv)
-        else:
-            messagebox.showwarning("Atenção", f"Venda finalizada, mas apenas {itens_gerados_sucesso} de {total_itens} Tickets de Troca foram gerados. Verifique o console para erros.", parent=self.janela_pdv)
+            for item_id in self.tvw_produtos.get_children():
+                valores = self.tvw_produtos.item(item_id)['values']
+                item_info = {
+                    'nome': valores[0],
+                    'codigo': valores[1],
+                    'tamanho': valores[2]
+                }
+                if self.gerar_ticket_troca_pdf(item_info, self.vendedor_selecionado, data_atual):
+                    itens_gerados_sucesso += 1
 
-        # Coleta os itens para a tela de resumo da venda (apenas nomes)
-        self.itens_venda = []
-        for item_id in self.tvw_produtos.get_children():
-            self.itens_venda.append(self.tvw_produtos.item(item_id)['values'][0])
+            # Mostra uma única mensagem de status sobre a geração dos tickets
+            if itens_gerados_sucesso == total_itens:
+                messagebox.showinfo("Sucesso", f"{itens_gerados_sucesso} Ticket(s) de Troca gerados com sucesso!", parent=self.janela_pdv)
+            else:
+                messagebox.showwarning("Atenção", f"Venda finalizada, mas apenas {itens_gerados_sucesso} de {total_itens} Tickets de Troca foram gerados.", parent=self.janela_pdv)
         
+        '''
+        # Coleta os itens para o resumo da venda
+        self.itens_venda = [self.tvw_produtos.item(item_id)['values'][0] for item_id in self.tvw_produtos.get_children()]
+        
+        # Registra a venda no console (terminal)
         print("Venda registrada:", {
             "itens": self.itens_venda,
             "total": self.total_compra,
-            "pagamentos": self.pagamentos
+            "pagamentos": self.pagamentos,
+            "desconto": self.desconto_aplicado_info
         })
-
+        '''
         self.tela_resumo_venda()
-
+    
     def tela_resumo_venda(self):
         self.limpar_frame()
         self.frame_atual = ttk.Frame(self.janela_pdv) # Usar self.janela_pdv

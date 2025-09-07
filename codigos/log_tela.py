@@ -12,6 +12,7 @@ from temas import GerenciadorTema
 from tela_ponto_venda import TelaPontoVenda
 from relatorio_pdf import gerar_relatorio_pdf
 from visualizar_treeviews import Consultas
+from tela_relatorio_vendas import TelaRelatorioVendas
 
 class Tela:
     def __init__(self, master):
@@ -19,6 +20,7 @@ class Tela:
         self.janela.title('Checkpoint')
         self.janela.state('zoomed')
 
+        self.vendas_realizadas = []
         self.mapa_imagens = {}
         self.imagem_tk = None
         self.frm_imagem_display = None
@@ -35,7 +37,8 @@ class Tela:
         self.dados_originais = []
         self.novo_item_contador = 0
         self.gerenciador_tema = GerenciadorTema(self.janela)
-        self.tela_venda = TelaPontoVenda(self.janela)
+        self.tela_venda = TelaPontoVenda(janela, self.vendas_realizadas)
+        self.tela_relatorio_vendas = TelaRelatorioVendas(janela, self.vendas_realizadas)
         self.tela_consulta = Consultas(self.janela)
         self.relatorio = gerar_relatorio_pdf
 
@@ -77,7 +80,10 @@ class Tela:
         self.mnu_configuracao.add_command(label='Temas', command=self.gerenciador_tema.mudar_tema)
         self.mnu_relatorios = tk.Menu(self.mnu_principal, tearoff=0); self.mnu_principal.add_cascade(label='Relatórios', menu=self.mnu_relatorios)
         self.mnu_relatorios.add_command(label='Divergências', command=self.abrir_tela_relatorio)
-        self.mnu_treeviews = tk.Menu(self.mnu_principal, tearoff=0); self.mnu_principal.add_cascade(label='Consultas', menu=self.mnu_treeviews)
+        self.mnu_relatorios.add_command(label='Vendas', command=self.tela_relatorio_vendas.mostrar_janela)
+
+        self.mnu_treeviews = tk.Menu(self.mnu_principal, tearoff=0)
+        self.mnu_principal.add_cascade(label='Consultas', menu=self.mnu_treeviews)
         self.mnu_treeviews.add_command(label='Funcionários', command=self.tela_consulta.visualizar_usuarios)
         self.mnu_treeviews.add_command(label='Clientes', command=self.tela_consulta.visualizar_clientes)
         self.mnu_treeviews.add_command(label='Produtos', command=self.tela_consulta.visualizar_produtos)
@@ -152,6 +158,10 @@ class Tela:
         self.tvw_inventario.bind('<<TreeviewSelect>>', self.mostrar_imagem_selecionada)
         
         self.filtrar_treeview(None)
+    
+    def abrir_tela_relatorio(self):
+        if not self.dados_originais:
+            messagebox.showwarning("Zero arquivos", "É necessário subir um arquivo para gerar o relatório de divergências.")
 
     def mostrar_imagem_selecionada(self, event=None):
         selecao = self.tvw_inventario.selection()

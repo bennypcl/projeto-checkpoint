@@ -274,3 +274,5 @@ desc temas;
 insert into temas (tema_nome, valor) values
 ('united', 'escuro'),
 ('solar', 'claro');
+
+ALTER TABLE produtos ADD COLUMN pro_caminho_imagem VARCHAR(255);
