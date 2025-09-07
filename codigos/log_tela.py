@@ -24,20 +24,44 @@ class Tela:
         self.imagem_tk = None
         self.frm_imagem_display = None
 
+        # --- Variáveis com Trace para Formatação Automática ---
+        self._is_formatting = False
+        self.user_var = tk.StringVar()
+        self.senha_var = tk.StringVar() # 1. ADICIONE A VARIÁVEL DA SENHA
+        # --------------------------------------------------------
+
         self.log = ttk.Frame(self.janela, width=200, height=300)
         self.log.place(relx=0.5, rely=0.5, anchor="center")
-        self.lbl_user = ttk.Label(self.log, text='Usuário:                     ', font=("Arial", 14)); self.lbl_user.grid(row=0, column=0, columnspan=2, sticky="w")
-        self.user_ent = tk.Entry(self.log); self.user_ent.grid(row=1, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW'); self.user_ent.focus_set()
-        self.lbl_senha = ttk.Label(self.log, text='Senha:', font=("Arial", 14)); self.lbl_senha.grid(row=2, column=0, sticky="w")
-        self.ent_senha = tk.Entry(self.log, show="*"); self.ent_senha.grid(row=3, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW')
-        self.btn_entrar = tk.Button(self.log, text='Entrar', bg='darkblue', fg='white', font=("Arial", 14), command=self.autentica); self.btn_entrar.grid(row=4, column=0, columnspan=2, pady=10)
+        
+        self.lbl_user = ttk.Label(self.log, text='Usuário:                     ', font=("Arial", 14))
+        self.lbl_user.grid(row=0, column=0, columnspan=2, sticky="w")
+        
+        self.user_ent = tk.Entry(self.log, textvariable=self.user_var)
+        self.user_ent.grid(row=1, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW')
+        self.user_ent.focus_set()
+        self.user_var.trace_add('write', 
+            lambda *args: self._formatar_para_maiusculo(self.user_var, self.user_ent))
+
+        self.lbl_senha = ttk.Label(self.log, text='Senha:', font=("Arial", 14))
+        self.lbl_senha.grid(row=2, column=0, sticky="w")
+        
+        # 2. CONECTE O CAMPO DE SENHA À VARIÁVEL
+        self.ent_senha = tk.Entry(self.log, show="*", textvariable=self.senha_var)
+        self.ent_senha.grid(row=3, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW')
+
+        # 3. ADICIONE O "OBSERVADOR" (TRACE) PARA A SENHA
+        self.senha_var.trace_add('write',
+            lambda *args: self._formatar_para_maiusculo(self.senha_var, self.ent_senha))
+        
+        self.btn_entrar = tk.Button(self.log, text='Entrar', bg='darkblue', fg='white', font=("Arial", 14), command=self.autentica)
+        self.btn_entrar.grid(row=4, column=0, columnspan=2, pady=10)
         self.janela.bind('<Return>', self.autentica)
         
         self.dados_originais = []
         self.novo_item_contador = 0
         self.gerenciador_tema = GerenciadorTema(self.janela)
-        self.tela_venda = TelaPontoVenda(janela, self.vendas_realizadas)
-        self.tela_relatorio_vendas = TelaRelatorioVendas(janela, self.vendas_realizadas)
+        self.tela_venda = TelaPontoVenda(self.janela, self.vendas_realizadas)
+        self.tela_relatorio_vendas = TelaRelatorioVendas(self.janela, self.vendas_realizadas)
         self.tela_consulta = Consultas(self.janela)
         self.relatorio = gerar_relatorio_pdf
 
@@ -59,8 +83,30 @@ class Tela:
                 cursor.close()
                 conn.close()
 
+    def _formatar_para_maiusculo(self, string_var, entry_widget):
+        # Se a função já estiver em execução, não faz nada (evita loop infinito)
+        if self._is_formatting:
+            return
+
+        self._is_formatting = True  # Avisa que a formatação começou
+        
+        texto = string_var.get()
+        texto_maiusculo = texto.upper()
+        string_var.set(texto_maiusculo)
+        
+        # Move o cursor para o final, verificando se o widget ainda existe
+        if entry_widget.winfo_exists():
+            entry_widget.after(1, lambda: entry_widget.icursor(len(texto_maiusculo)))
+
+        self._is_formatting = False # Avisa que a formatação terminou
+
     def autentica(self, event=None):
-        if self.user_ent.get() == "adm" and self.ent_senha.get() == "adm":
+        # Lendo os valores das StringVars
+        usuario = self.user_var.get()
+        senha = self.senha_var.get()
+
+        # Como os campos já forçam para maiúsculo, a verificação fica simples
+        if usuario == "ADM" and senha == "ADM":
             self.carregar_mapa_de_imagens()
             self.menu()
         else:
