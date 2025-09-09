@@ -109,6 +109,7 @@ class Tela:
         if usuario == "ADM" and senha == "ADM":
             self.carregar_mapa_de_imagens()
             self.menu()
+            self.janela.unbind('<Return>')
         else:
             messagebox.showwarning("Atenção!", "Verificar credenciais.")
 
@@ -152,6 +153,12 @@ class Tela:
         
         frm_controle = ttk.Frame(frm_controles_e_lista); frm_controle.grid(row=0, column=0, sticky="ew", pady=(10,0))
         self.btn_ad_arquivo = ttk.Button(frm_controle, text='Carregar Inventário (.txt)', command=self.upp_arquivo); self.btn_ad_arquivo.pack(side=LEFT, padx=5)
+        self.btn_ad_contagem = ttk.Button(frm_controle, text='Conta Est. por SKU', command=self.contar_sku); self.btn_ad_contagem.pack(side=RIGHT, padx=5)
+        self.modificador_var = tk.IntVar(value=1)
+        self.spn_modificador = ttk.Spinbox(frm_controle, from_=1, to=10, textvariable=self.modificador_var, width=2); self.spn_modificador.pack(side=RIGHT, padx=2.5)
+        self.ent_ad_contagem = ttk.Entry(frm_controle); self.ent_ad_contagem.pack(side=RIGHT, padx=2.5)
+        self.ent_ad_contagem.bind('<Return>', self.contar_sku)
+
         
         frm_treeview = ttk.Frame(frm_controles_e_lista); frm_treeview.grid(row=1, column=0, sticky="nsew", pady=10); frm_treeview.rowconfigure(0, weight=1); frm_treeview.columnconfigure(0, weight=1)
         colunas = ("ref", "sku", "desc", "tam", "preco", "est", "est_real")
@@ -353,6 +360,56 @@ class Tela:
 
     def abrir_tela_relatorio(self):
         messagebox.showinfo("Relatório", "Função de relatório a ser implementada.")
+
+    # Função de contar digitando somente o SKU
+    def contar_sku(self, event=None):
+        # Pega o SKU do campo de entrada, remove espaços e o converte para maiúsculo
+        sku_a_contar = self.ent_ad_contagem.get().strip().upper()
+
+        if not sku_a_contar:
+            return  # Não faz nada se o campo estiver vazio
+
+        produto_encontrado = False
+        # Itera sobre a lista de dados para encontrar o produto
+        for i, item_data in enumerate(self.dados_originais):
+            # posição SKU
+            if item_data[2] == sku_a_contar:
+                
+                # posição conta estoque
+                est_real_atual = item_data[7]
+
+                valor_a_somar = self.modificador_var.get()
+                
+                # Tenta converter para inteiro e somar 1. Se falhar (ex: campo vazio), começa com 1.
+                try:
+                    nova_quantidade = int(est_real_atual) + valor_a_somar
+                except (ValueError, TypeError):
+                    nova_quantidade = valor_a_somar
+                
+                # Atualiza a quantidade na sua lista de dados principal
+                self.dados_originais[i][7] = nova_quantidade
+                
+                produto_encontrado = True
+                iid_do_item = item_data[0] # Pega o iid do item para poder selecioná-lo
+                break # Para o loop assim que encontrar o produto
+
+        # Se o produto foi encontrado...
+        if produto_encontrado:
+            # 5. Recarrega a Treeview para mostrar a atualização e aplicar as cores
+            self.filtrar_treeview(None)
+            
+            # Limpa o campo de entrada para a próxima contagem
+            self.ent_ad_contagem.delete(0, "end")
+            
+            # Opcional: Seleciona e foca no item que foi atualizado na tabela
+            if iid_do_item in self.tvw_inventario.get_children():
+                self.tvw_inventario.selection_set(iid_do_item)
+                self.tvw_inventario.see(iid_do_item)
+
+        # Se não encontrou...
+        else:
+            messagebox.showwarning("SKU não encontrado", f"O SKU '{sku_a_contar}' não foi localizado no inventário carregado.")
+            self.ent_ad_contagem.delete(0, "end")
 
 if __name__ == "__main__":
     janela = ttk.Window(themename='united')
