@@ -282,3 +282,5 @@ VALUES ('P0001', 'S0001', 'Camisetas Batman pdv', 'M', 'Indefinida', 10, 89.90, 
 
 INSERT INTO produtos (pro_ref, pro_sku, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor, pro_caminho_imagem) 
 VALUES ('P0002', 'S0002', 'Caneca Star Wars', '350ml', 'Indefinida', 0, 49.90, 'imagens_produtos/caneca_star_wars.jpg');
+
+INSERT INTO usuarios (usu_cargo, usu_nome, usu_cpf) VALUES ('Vendedor(a)', 'Troca', '00000000000');

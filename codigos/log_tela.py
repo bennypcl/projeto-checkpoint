@@ -24,11 +24,9 @@ class Tela:
         self.imagem_tk = None
         self.frm_imagem_display = None
 
-        # --- Variáveis com Trace para Formatação Automática ---
         self._is_formatting = False
         self.user_var = tk.StringVar()
-        self.senha_var = tk.StringVar() # 1. ADICIONE A VARIÁVEL DA SENHA
-        # --------------------------------------------------------
+        self.senha_var = tk.StringVar()
 
         self.log = ttk.Frame(self.janela, width=200, height=300)
         self.log.place(relx=0.5, rely=0.5, anchor="center")
@@ -45,11 +43,11 @@ class Tela:
         self.lbl_senha = ttk.Label(self.log, text='Senha:', font=("Arial", 14))
         self.lbl_senha.grid(row=2, column=0, sticky="w")
         
-        # 2. CONECTE O CAMPO DE SENHA À VARIÁVEL
+        # CONECTANDO O CAMPO DE SENHA À VARIÁVEL
         self.ent_senha = tk.Entry(self.log, show="*", textvariable=self.senha_var)
         self.ent_senha.grid(row=3, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW')
 
-        # 3. ADICIONE O "OBSERVADOR" (TRACE) PARA A SENHA
+        # OBSERVADOR (TRACE) PARA A SENHA
         self.senha_var.trace_add('write',
             lambda *args: self._formatar_para_maiusculo(self.senha_var, self.ent_senha))
         
@@ -60,9 +58,9 @@ class Tela:
         self.dados_originais = []
         self.novo_item_contador = 0
         self.gerenciador_tema = GerenciadorTema(self.janela)
-        self.tela_venda = TelaPontoVenda(self.janela, self.vendas_realizadas)
         self.tela_relatorio_vendas = TelaRelatorioVendas(self.janela, self.vendas_realizadas)
         self.tela_consulta = Consultas(self.janela)
+        self.tela_venda = TelaPontoVenda(self.janela, self.vendas_realizadas, self.tela_consulta)
         self.relatorio = gerar_relatorio_pdf
 
     def carregar_mapa_de_imagens(self):
@@ -283,7 +281,6 @@ class Tela:
         self.dados_originais.append([iid, ref, sku, desc, tam, quant, valor, ""])
         self.filtrar_treeview(None)
 
-    # --- FUNÇÃO ATUALIZADA COM LÓGICA DE TAGS/CORES CORRIGIDA ---
     def filtrar_treeview(self, criterio_tupla=None):
         self.tvw_inventario.delete(*self.tvw_inventario.get_children())
         

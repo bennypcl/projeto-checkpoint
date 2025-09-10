@@ -2,10 +2,83 @@ import tkinter as tk
 from tkinter import ttk
 import ttkbootstrap as ttkb
 from conexao import conectar
+from crud import listar_produtos
+from ttkbootstrap.constants import *
 
 class Consultas:
     def __init__(self, master):
-        self.master = master
+        self.master = master # Referência à janela principal (log_tela)
+        self.janela_selecao_produto = None
+        self._callback_selecao = None
+
+    def _criar_janela_selecao_produto(self, parent):
+        """Função interna para criar a interface da janela de seleção apenas uma vez."""
+        top = tk.Toplevel(parent)
+        top.title("Consultar e Selecionar Produto")
+        top.geometry("800x600")
+        top.transient(parent)
+
+        # Treeview para mostrar os produtos
+        colunas = ('sku', 'descricao', 'tamanho', 'preco', 'quant')
+        tree = ttk.Treeview(top, columns=colunas, show="headings")
+        tree.pack(fill=BOTH, expand=True, padx=10, pady=10)
+
+        tree.heading('sku', text='SKU')
+        tree.column('sku', width=100)
+        tree.heading('descricao', text='Descrição')
+        tree.column('descricao', width=350)
+        
+        tree.heading('tamanho', text='Tamanho')
+        tree.column('tamanho', width=80, anchor="center")        
+        tree.heading('preco', text='Preço')
+        tree.column('preco', width=100, anchor="e")
+        tree.heading('quant', text='Estoque')
+        tree.column('quant', width=100, anchor="center")
+
+        # Popula o Treeview com dados do banco
+        produtos = listar_produtos()
+        for prod in produtos:
+            tree.insert('', END, values=(
+                prod['pro_sku'], 
+                prod['pro_descricao'], 
+                prod['pro_tam'],
+                f"{prod['pro_valor']:.2f}", 
+                prod['pro_quant']
+            ))
+
+        def confirmar_selecao():
+            selecionado = tree.selection()
+            if not selecionado: return
+            sku_selecionado = tree.item(selecionado[0])['values'][0]
+            if self._callback_selecao:
+                self._callback_selecao(sku_selecionado)
+            top.grab_release()
+            top.withdraw()
+
+        def cancelar_selecao():
+            top.grab_release()
+            top.withdraw()
+
+        frame_botoes = ttk.Frame(top)
+        frame_botoes.pack(fill=X, padx=10, pady=5)
+        btn_selecionar = ttk.Button(frame_botoes, text="Selecionar", command=confirmar_selecao, bootstyle=PRIMARY)
+        btn_selecionar.pack(side=RIGHT, padx=5)
+        ttk.Button(frame_botoes, text="Cancelar", command=cancelar_selecao, bootstyle=(SECONDARY, OUTLINE)).pack(side=RIGHT)
+        tree.bind("<Double-1>", lambda event: btn_selecionar.invoke())
+        top.protocol("WM_DELETE_WINDOW", cancelar_selecao)
+        return top
+
+    def selecionar_produto(self, parent, callback):
+        """Abre a janela de seleção, criando-a se necessário."""
+        self._callback_selecao = callback
+
+        if self.janela_selecao_produto is None or not tk.Toplevel.winfo_exists(self.janela_selecao_produto):
+            self.janela_selecao_produto = self._criar_janela_selecao_produto(parent) # Passa o parent adiante
+        else:
+            self.janela_selecao_produto.deiconify()
+            self.janela_selecao_produto.lift()
+
+        self.janela_selecao_produto.grab_set()
 
     def visualizar_usuarios(self):
         conexao = conectar()
@@ -75,7 +148,7 @@ class Consultas:
             return
         cursor = conexao.cursor()
         try:
-            cursor.execute("SELECT pro_id, pro_ref, pro_sku, pro_descricao, pro_quant, pro_valor FROM produtos")
+            cursor.execute("SELECT pro_id, pro_ref, pro_sku, pro_descricao, pro_tam, pro_quant, pro_valor FROM produtos")
             dados = cursor.fetchall()
         except Exception as e:
             print(f"Erro ao executar a consulta de produtos: {e}")
@@ -88,12 +161,17 @@ class Consultas:
         janela_produtos.title("Visualizar Produtos")
         janela_produtos.geometry("900x700")
 
-        colunas = ("ID", "Ref", "SKU", "Descrição", "Quantidade", "Valor")
+        colunas = ("ID", "Ref", "SKU", "Descrição", "Tamanho", "Quantidade", "Valor")
         tree = ttk.Treeview(janela_produtos, columns=colunas, show="headings")
 
         for col in colunas:
             tree.heading(col, text=col)
-            tree.column(col, anchor="center")
+            # Ajuste para a coluna Descrição ser maior
+            if col == "Descrição":
+                tree.column(col, anchor="w", width=300)
+            else:
+                tree.column(col, anchor="center", width=100)
+
 
         for linha in dados:
             tree.insert("", "end", values=linha)

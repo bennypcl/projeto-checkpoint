@@ -7,14 +7,21 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from datetime import datetime
 from reportlab.lib.units import cm
-
-#scrollbar || aumentar tamanho da tela
+from crud import (
+    buscar_cliente_por_cpf, 
+    inserir_cliente, 
+    atualizar_cliente, 
+    buscar_produto_por_sku, 
+    salvar_venda_completa
+)
+from crud import listar_usuarios
 
 class TelaPontoVenda:
-    def __init__(self, master, lista_de_vendas_global):
+    def __init__(self, master, lista_de_vendas_global, tela_consulta_ref):
         self.master = master
-        self.lista_de_vendas_global = lista_de_vendas_global # Guarda a referência da lista
-        self.janela_pdv = None # Janela Toplevel para o PDV
+        self.lista_de_vendas_global = lista_de_vendas_global
+        self.tela_consulta_ref = tela_consulta_ref # Guarda a referência
+        self.janela_pdv = None
         self.vendedor_selecionado = None
         self.dados_cliente = {}
         self.produtos = []
@@ -22,7 +29,7 @@ class TelaPontoVenda:
         self.valor_restante = 0.0
         self.pagamentos = []
         self.produtos_na_venda = []
-        self.vendedores = ["Gerente", "Alana Silva", "Bárbara Moreira", "Carla Alves", "Troca"]
+        self.vendedores = []
         self.bandeiras = ["Visa", "MasterCard", "Elo", "Amex"]
 
         self.frame_atual = None
@@ -47,6 +54,20 @@ class TelaPontoVenda:
 
         self._editando_cliente = False
         self.modo_manipulacao = "adicionar"
+        self.vendedor_selecionado_id = None
+
+    def abrir_consulta_produtos(self):
+        """Chama a tela de seleção de produtos e passa a janela-mãe e a função de callback."""
+        self.tela_consulta_ref.selecionar_produto(
+            parent=self.janela_pdv, 
+            callback=self.produto_selecionado_callback
+        )
+
+    def produto_selecionado_callback(self, sku):
+        """Função que é chamada pela tela de consulta quando um produto é selecionado."""
+        self.produto_var.set(sku)
+        self.entry_produto.focus_set()
+        self.entry_produto.icursor(END)
 
     def limpar_frame(self):
         if self.frame_atual:
@@ -65,6 +86,7 @@ class TelaPontoVenda:
     def tela_selecao_vendedor(self):
         # Limpeza de dados da venda anterior
         self.vendedor_selecionado = None
+        self.vendedor_selecionado_id = None
         self.dados_cliente = {}
         self.produtos = []
         self.total_compra = 0.0
@@ -84,10 +106,6 @@ class TelaPontoVenda:
             self.nome_var.set("")
             self.telefone_var.set("")
 
-            # O Spinbox do ano pode ser resetado se desejado, mas não é crucial
-            # if hasattr(self, 'spin_ano'):
-            #     self.spin_ano.set("2000")
-
         self.limpar_frame()
         self.frame_atual = ttk.Frame(self.janela_pdv)
         self.frame_atual.pack(fill="both", expand=True)
@@ -100,15 +118,27 @@ class TelaPontoVenda:
 
         # Conteúdo centralizado
         ttk.Label(container, text="Selecione o Vendedor", font=("Arial", 16)).grid(row=0, column=0, columnspan=2, pady=(0, 10))
+
+        #Busca os vendedores do banco de dados
+        self.lista_de_usuarios_completa = listar_usuarios() # Guarda a lista completa
+        # Extrai apenas os nomes para mostrar no Combobox
+        self.vendedores = [u['usu_nome'] for u in self.lista_de_usuarios_completa]
         self.cmb_vendedor = ttk.Combobox(container, values=self.vendedores, state="readonly")
         self.cmb_vendedor.grid(row=1, column=0, columnspan=2, pady=10)
         ttk.Button(container, text="Avançar", command=self.validar_vendedor).grid(row=2, column=0, columnspan=2, pady=10)
 
     def validar_vendedor(self):
-        if not self.cmb_vendedor.get():
+        nome_vendedor = self.cmb_vendedor.get()
+        if not nome_vendedor:
             messagebox.showerror("Erro", "Selecione um vendedor para continuar.")
             return
-        self.vendedor_selecionado = self.cmb_vendedor.get()
+        self.vendedor_selecionado = nome_vendedor
+
+        # Procura o ID do vendedor na lista completa
+        for usuario in self.lista_de_usuarios_completa:
+            if usuario['usu_nome'] == nome_vendedor:
+                self.vendedor_selecionado_id = usuario['usu_id']
+                break
 
         if self.vendedor_selecionado == "Troca":
             self.modo_manipulacao = "devolver"
@@ -218,8 +248,9 @@ class TelaPontoVenda:
         self.entry_cpf = ttk.Entry(container, width=30, textvariable=self.cpf_var)
         self.entry_cpf.grid(row=2, column=1, padx=5, pady=8)
         self.entry_cpf.focus_set()
+        self.entry_cpf.bind("<FocusOut>", self._ao_sair_do_cpf)
 
-        # Ativa o trace para o CPF (LUGAR CORRETO)
+        # Ativa o trace para o CPF
         if not self._cpf_trace_set:
             self.cpf_var.trace_add('write', self.formatar_cpf)
             self._cpf_trace_set = True
@@ -229,7 +260,7 @@ class TelaPontoVenda:
         self.entry_nome = ttk.Entry(container, width=30, textvariable=self.nome_var)
         self.entry_nome.grid(row=3, column=1, padx=5, pady=8)
 
-        # Ativa o trace para o Nome (LUGAR CORRETO)
+        # Ativa o trace para o Nome
         if not self._nome_trace_set:
             self.nome_var.trace_add('write', 
                 lambda *args: self._formatar_para_maiusculo(self.nome_var, self.entry_nome))
@@ -240,7 +271,7 @@ class TelaPontoVenda:
         self.entry_telefone = ttk.Entry(container, width=30, textvariable=self.telefone_var)
         self.entry_telefone.grid(row=4, column=1, padx=5, pady=8)
 
-        # Ativa o trace para o Telefone (LUGAR CORRETO)
+        # Ativa o trace para o Telefone
         if not self._telefone_trace_set:
             self.telefone_var.trace_add('write', self.formatar_telefone)
             self._telefone_trace_set = True
@@ -254,19 +285,19 @@ class TelaPontoVenda:
         # Registra a função de validação
         vcmd = (self.janela_pdv.register(self._validar_dia_mes), '%P')
 
-        # Spinbox para o Dia, com nova validação e formatação
+        # Spinbox para o Dia, com validação e formatação
         self.spin_dia = ttk.Spinbox(frame_nascimento, from_=1, to=31, width=4,
                                     validate='key', validatecommand=vcmd)
         self.spin_dia.pack(side="left", padx=(0, 5))
         self.spin_dia.bind("<FocusOut>", lambda e: self._formatar_data_focus_out(e, 31))
         
-        # Spinbox para o Mês, com nova validação e formatação
+        # Spinbox para o Mês, com validação e formatação
         self.spin_mes = ttk.Spinbox(frame_nascimento, from_=1, to=12, width=4,
                                     validate='key', validatecommand=vcmd)
         self.spin_mes.pack(side="left", padx=5)
         self.spin_mes.bind("<FocusOut>", lambda e: self._formatar_data_focus_out(e, 12))
 
-        # Spinbox para o Ano (não precisa de validação extra)
+        # Spinbox para o Ano
         self.spin_ano = ttk.Spinbox(frame_nascimento, from_=1920, to=2024, width=6)
         self.spin_ano.pack(side="left")
 
@@ -277,6 +308,34 @@ class TelaPontoVenda:
         btn_voltar.pack(side="left", padx=10)
         btn_continuar = ttk.Button(frame_botoes, text="Continuar", command=self.verificar_dados_cliente)
         btn_continuar.pack(side="left", padx=10)
+
+    def _ao_sair_do_cpf(self, event=None):
+        """Chamado quando o usuário sai do campo CPF para buscar o cliente."""
+        cpf = self.cpf_var.get()
+        cpf_numeros = "".join(filter(str.isdigit, cpf))
+
+        if len(cpf_numeros) == 11:
+            cliente_existente = buscar_cliente_por_cpf(cpf_numeros)
+
+            if cliente_existente:
+                self.nome_var.set(cliente_existente.get('cli_nome', ''))
+                
+                # Formata o telefone (DDD + numero)
+                ddd = cliente_existente.get('cli_ddd', '')
+                tel = cliente_existente.get('cli_telefone', '')
+                if ddd and tel:
+                    self.telefone_var.set(f"({ddd}) {tel}")
+
+                # Preenche a data de nascimento
+                data_nasc = cliente_existente.get('cli_data_nascimento')
+                if data_nasc:
+                    # Formata a data do banco (YYYY-MM-DD) para o formato dos Spinboxes
+                    dia = data_nasc.strftime('%d')
+                    mes = data_nasc.strftime('%m')
+                    ano = data_nasc.strftime('%Y')
+                    self.spin_dia.set(dia)
+                    self.spin_mes.set(mes)
+                    self.spin_ano.set(ano)
 
     def validar_cpf(self, cpf):
         cpf = re.sub(r'\D', '', cpf)
@@ -305,25 +364,41 @@ class TelaPontoVenda:
         return True
 
     def verificar_dados_cliente(self):
-        if not self.validar_campos_cliente():
-            return
+        cpf_numeros = "".join(filter(str.isdigit, self.cpf_var.get()))
+        nome = self.nome_var.get()
+        tel_formatado = self.telefone_var.get()
         
-        dia = self.spin_dia.get()
-        mes = self.spin_mes.get()
-        ano = self.spin_ano.get()
-        
-        data_nascimento_formatada = ""
-        if dia and mes and ano:
-            # A formatação automática garante que dia e mês já terão 2 dígitos
-            data_nascimento_formatada = f"{dia}/{mes}/{ano}"
+        # Extrai DDD e Telefone
+        tel_numeros = "".join(filter(str.isdigit, tel_formatado))
+        ddd = tel_numeros[:2] if len(tel_numeros) >= 2 else ""
+        telefone = tel_numeros[2:] if len(tel_numeros) > 2 else ""
 
-        # Lendo todos os dados a partir das StringVars para consistência
+        # Monta a data no formato do banco (YYYY-MM-DD)
+        data_nasc_formatada = None
+        if self.spin_dia.get() and self.spin_mes.get() and self.spin_ano.get():
+            data_nasc_formatada = f"{self.spin_ano.get()}-{self.spin_mes.get()}-{self.spin_dia.get()}"
+
+        # Salva os dados na memória para usar na venda
         self.dados_cliente = {
-            "cpf": self.cpf_var.get(),
-            "nome": self.nome_var.get(),
-            "telefone": self.telefone_var.get(),
-            "nascimento": data_nascimento_formatada
+            "cpf": cpf_numeros, "nome": nome, "telefone": tel_formatado, 
+            "nascimento": f"{self.spin_dia.get()}/{self.spin_mes.get()}/{self.spin_ano.get()}" if data_nasc_formatada else ""
         }
+
+        # Lógica de salvar/atualizar no banco
+        if cpf_numeros and nome: # Só salva se tiver CPF e Nome
+            cliente_existente = buscar_cliente_por_cpf(cpf_numeros)
+            if cliente_existente:
+                # Se existe, atualiza
+                atualizar_cliente(cpf_numeros, nome, data_nasc_formatada, ddd, telefone)
+                self.dados_cliente['id'] = cliente_existente['cli_id'] # Guarda o ID
+            else:
+                # Se não existe, insere
+                inserir_cliente(cpf=cpf_numeros, nome=nome, data_nascimento=data_nasc_formatada, ddd=ddd, telefone=telefone)
+                # Idealmente, após inserir, você buscaria o cliente de novo para pegar o ID
+                novo_cliente = buscar_cliente_por_cpf(cpf_numeros)
+                if novo_cliente:
+                    self.dados_cliente['id'] = novo_cliente['cli_id']
+
         self.tela_venda()
 
     def aplicar_desconto(self):
@@ -446,15 +521,14 @@ class TelaPontoVenda:
         self.frame_atual = ttk.Frame(self.janela_pdv)
         self.frame_atual.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
-        # --- ESTRUTURA PRINCIPAL: DOIS PAINÉIS (Esquerda e Direita) ---
-        self.frame_atual.columnconfigure(0, weight=2) # Painel esquerdo (produtos) será maior
-        self.frame_atual.columnconfigure(1, weight=1) # Painel direito (pagamentos) menor
-        self.frame_atual.rowconfigure(0, weight=1)    # Linha única que se expande verticalmente
+        self.frame_atual.columnconfigure(0, weight=1) 
+        self.frame_atual.rowconfigure(0, weight=1)    
 
         container_esquerda = ttk.Frame(self.frame_atual)
-        container_direita = ttk.Frame(self.frame_atual)
+        container_direita = ttk.Frame(self.frame_atual, width=450)        
         container_esquerda.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        container_direita.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        container_direita.grid(row=0, column=1, sticky="ns", padx=(10, 0))
+        container_direita.grid_propagate(False)
 
         # --- PAINEL ESQUERDO: PRODUTOS E TOTAL ---
         container_esquerda.rowconfigure(2, weight=1) # A lista de produtos agora está na linha 2
@@ -478,7 +552,7 @@ class TelaPontoVenda:
             btn_cadastrar_cliente = ttk.Button(frame_cliente_info, text="Cadastrar Cliente", command=self.editar_cliente)
             btn_cadastrar_cliente.grid(row=0, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
 
-        # NOVO: Frame para os botões e entrada de produto
+        # Frame para os botões e entrada de produto
         frame_manipula_produto = ttk.LabelFrame(container_esquerda, text="Manipular Produtos")
         frame_manipula_produto.grid(row=1, column=0, sticky="ew", pady=(0,10))
         frame_manipula_produto.columnconfigure(0, weight=1)
@@ -506,9 +580,12 @@ class TelaPontoVenda:
         ttk.Label(frame_entry_produto, text="Produto:").grid(row=0, column=0, padx=(0, 5))
         self.entry_produto = ttk.Entry(frame_entry_produto, textvariable=self.produto_var)
         self.entry_produto.grid(row=0, column=1, sticky="ew")
-        self.entry_produto.focus_set()
-        # A tecla Enter agora chama a função central de processamento
-        self.entry_produto.bind("<Return>", self.processar_produto_event) 
+        self.entry_produto.focus_set()        
+        self.entry_produto.bind("<Return>", self.processar_produto_event)
+
+        btn_consulta = ttk.Button(frame_entry_produto, text="...", command=self.abrir_consulta_produtos, width=3)
+        btn_consulta.grid(row=0, column=2, padx=(5,0), pady=5)
+        
         if not self._produto_trace_set:
             self.produto_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(self.produto_var, self.entry_produto))
             self._produto_trace_set = True
@@ -550,13 +627,11 @@ class TelaPontoVenda:
         self.total_label = ttk.Label(frame_totais, text="R$ 0.00", font=("Arial", 14, "bold"))
         self.total_label.grid(row=2, column=1, sticky="e", pady=(5,0))
 
-        # --- PAINEL DIREITO: PAGAMENTOS E AÇÕES ---
+        # PAINEL DIREITO: PAGAMENTOS E AÇÕES
         container_direita.columnconfigure(0, weight=1)
-        container_direita.rowconfigure(3, weight=1) # Ajusta o peso para o novo frame
+        container_direita.rowconfigure(3, weight=1)
         
-        ttk.Label(container_direita, text=f"{self.vendedor_selecionado}", font=("Arial", 9, "italic")).grid(row=0, column=0, sticky="w")
-
-        # Seção de Entrada de Valor e Formas de Pagamento
+        ttk.Label(container_direita, text=f"Vendedor(a): {self.vendedor_selecionado}", font=("Arial", 9, "italic")).grid(row=0, column=0, sticky="w")
         ttk.Label(container_direita, text="Valor a Pagar:", font=("Arial", 12)).grid(row=1, column=0, sticky="w", pady=(10,5))
         self.valor_editavel = ttk.Entry(container_direita, font=("Arial", 14), justify="right")
         self.valor_editavel.grid(row=2, column=0, sticky="ew", pady=(0, 10))
@@ -571,9 +646,13 @@ class TelaPontoVenda:
         ttk.Button(frame_formas_pagamento, text="Crédito", command=self.pagamento_credito).grid(row=1, column=0, sticky="ew", padx=2, pady=2)
         ttk.Button(frame_formas_pagamento, text="Pix", command=self.pagamento_pix).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
 
-        # Frame de Desconto
+        # Frame para detalhes de pagamento dinâmico
+        self.frame_detalhes_pagamento = ttk.Frame(container_direita)
+        self.frame_detalhes_pagamento.grid(row=4, column=0, sticky="ew", pady=5)
+
+        #Frame de desconto
         frame_desconto = ttk.LabelFrame(container_direita, text="Aplicar Desconto")
-        frame_desconto.grid(row=4, column=0, sticky="ew", pady=10)
+        frame_desconto.grid(row=5, column=0, sticky="ew", pady=10)
         frame_desconto.columnconfigure(1, weight=1)
 
         # Atribuindo os RadioButtons a variáveis para poder desabilitá-los
@@ -600,9 +679,8 @@ class TelaPontoVenda:
             self.btn_aplicar_desconto.config(state="disabled")
             self.btn_limpar_desconto.config(state="disabled")
 
-        # Seção de Resumo de Pagamentos
         frame_resumo_pagamentos = ttk.Frame(container_direita)
-        frame_resumo_pagamentos.grid(row=5, column=0, sticky="ew", pady=(10,5))
+        frame_resumo_pagamentos.grid(row=6, column=0, sticky="ew", pady=(10,5))
         frame_resumo_pagamentos.columnconfigure(0, weight=1)
         ttk.Label(frame_resumo_pagamentos, text="Pagamentos Realizados:").grid(row=0, column=0, sticky="w")
         self.lista_pagamentos = tk.Listbox(frame_resumo_pagamentos, height=4)
@@ -610,17 +688,16 @@ class TelaPontoVenda:
         ttk.Button(frame_resumo_pagamentos, text="Limpar Pagamentos", command=self.limpar_pagamentos, bootstyle=(SECONDARY, OUTLINE)).grid(row=2, column=0, sticky="ew", pady=(5,0))
         self.label_troco = ttk.Label(frame_resumo_pagamentos, text="", bootstyle="info", font=("Arial", 12, "bold"))
         self.label_troco.grid(row=3, column=0, sticky="e", pady=(5,0))
-        
+
         # Opções com Checkbox
         frame_opcoes_finais = ttk.Frame(container_direita)
-        frame_opcoes_finais.grid(row=6, column=0, sticky="ew", pady=5)
-        
+        frame_opcoes_finais.grid(row=7, column=0, sticky="ew", pady=5)
         chk_imprimir = ttk.Checkbutton(frame_opcoes_finais, text="Imprimir Ticket de Troca", variable=self.imprimir_ticket_var)
         chk_imprimir.pack()
 
         # Seção de Ações Finais
         frame_acoes = ttk.Frame(container_direita)
-        frame_acoes.grid(row=7, column=0, sticky="ew", pady=(10, 0))
+        frame_acoes.grid(row=8, column=0, sticky="ew", pady=(10, 0))
         frame_acoes.columnconfigure((0, 1), weight=1)
         ttk.Button(frame_acoes, text="CANCELAR VENDA", command=self.tela_selecao_vendedor, bootstyle=SECONDARY).grid(row=0, column=0, sticky="ew", padx=(0, 5), ipady=10)
         self.btn_finalizar = ttk.Button(frame_acoes, text="FINALIZAR VENDA", command=self.finalizar_venda)
@@ -643,13 +720,10 @@ class TelaPontoVenda:
             self.btn_aplicar_desconto.config(state="disabled")
 
     def atualizar_total(self):
-        # O subtotal é o valor bruto dos produtos
         subtotal = 0.0
-        for item_id in self.tvw_produtos.get_children():
-            preco_str = self.tvw_produtos.item(item_id)['values'][3]
-            subtotal += float(preco_str)
+        for produto in self.produtos_na_venda:
+            subtotal += produto['preco']
         
-        # O total da compra agora é o subtotal menos o desconto
         self.total_compra = subtotal - self.desconto_aplicado_valor
 
         # Atualiza os labels na tela
@@ -658,55 +732,59 @@ class TelaPontoVenda:
         self.total_label.config(text=f"R$ {self.total_compra:.2f}")
 
         # Recalcula o valor restante com base nos pagamentos já feitos
-        total_pago = sum(valor for forma, valor in self.pagamentos)
+        total_pago = sum(p['valor'] for p in self.pagamentos)
         self.valor_restante = self.total_compra - total_pago
         
         self.valor_editavel.delete(0, tk.END)
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
 
     def adicionar_produto(self):
-        produto_nome = self.produto_var.get()
-        if produto_nome:
-            preco = 10.00
-            
-            # Cria um dicionário para o produto
+        sku_digitado = self.produto_var.get()
+        if not sku_digitado:
+            return
+
+        produto_db = buscar_produto_por_sku(sku_digitado)
+        
+        if produto_db:
             novo_produto = {
-                'nome': produto_nome,
-                'codigo': f"SKU-{len(self.produtos_na_venda) + 100}",
-                'tamanho': "M",
-                'preco': preco
+                'id': produto_db['pro_id'], # Guarda o ID do produto
+                'nome': produto_db['pro_descricao'],
+                'codigo': produto_db['pro_sku'],
+                'tamanho': produto_db['pro_tam'],
+                'preco': float(produto_db['pro_valor'])
             }
-            
-            # Adiciona o dicionário à nossa lista em memória
             self.produtos_na_venda.append(novo_produto)
-            
-            # Atualiza a tela
             self.exibir_produtos()
             self.atualizar_total()
             self.produto_var.set("")
+        else:
+            messagebox.showerror("Erro", f"Produto com SKU '{sku_digitado}' não encontrado.", parent=self.janela_pdv)
     
     def processar_produto_event(self, event=None):
         """Função chamada pelo evento da tecla Enter para executar a ação do modo atual."""
         self.processar_produto_entry()
 
     def remover_produto(self):
-        """Remove um produto da venda pelo nome digitado no campo de produto."""
-        produto_nome_para_remover = self.produto_var.get()
-        if not produto_nome_para_remover:
-            messagebox.showwarning("Atenção", "Digite o nome do produto a ser removido da venda.", parent=self.janela_pdv)
+        """Remove um produto da venda pelo SKU digitado no campo de produto."""
+        # Pega o SKU do campo de texto e o formata
+        sku_para_remover = self.produto_var.get().strip().upper()
+        
+        if not sku_para_remover:
+            messagebox.showwarning("Atenção", "Digite o SKU do produto a ser removido da venda.", parent=self.janela_pdv)
             return
 
-        # Procura o produto na lista
         produto_encontrado = None
+        # Procura o produto na lista da venda atual pelo SKU (que está no campo 'codigo')
         for produto in self.produtos_na_venda:
-            if produto['nome'].upper() == produto_nome_para_remover.upper():
+            if produto['codigo'].upper() == sku_para_remover:
                 produto_encontrado = produto
                 break
         
         if produto_encontrado:
             self.produtos_na_venda.remove(produto_encontrado)
+            messagebox.showinfo("Sucesso", f"Produto SKU '{sku_para_remover}' removido.", parent=self.janela_pdv)
         else:
-            messagebox.showerror("Erro", f"Produto '{produto_nome_para_remover}' não encontrado na venda.", parent=self.janela_pdv)
+            messagebox.showerror("Erro", f"Produto SKU '{sku_para_remover}' não encontrado na venda atual.", parent=self.janela_pdv)
             
         # Atualiza a tela
         self.exibir_produtos()
@@ -714,31 +792,36 @@ class TelaPontoVenda:
         self.produto_var.set("")
 
     def devolver_produto(self):
-        """Adiciona um produto como devolução, gerando um crédito (pagamento negativo)."""
-        produto_nome = self.produto_var.get()
-        if not produto_nome:
-            messagebox.showwarning("Atenção", "Digite o nome do produto a ser devolvido.", parent=self.janela_pdv)
+        """Busca um produto no banco pelo SKU e o adiciona como devolução."""
+        sku_devolvido = self.produto_var.get().strip().upper()
+        if not sku_devolvido:
+            messagebox.showwarning("Atenção", "Digite o SKU do produto a ser devolvido.", parent=self.janela_pdv)
             return
 
-        preco = 10.00 # Usando o mesmo preço fixo para o crédito
-        
-        # Cria o dicionário do produto devolvido com preço negativo
-        produto_devolvido = {
-            'nome': f"[DEVOLUÇÃO] {produto_nome}",
-            'codigo': "TROCA",
-            'tamanho': "-",
-            'preco': -preco # O preço é negativo para abater do subtotal
-        }
-        
-        self.produtos_na_venda.append(produto_devolvido)
-        
-        # REMOVIDO: A linha que registrava um pagamento negativo foi removida.
-        # A devolução agora afeta apenas o subtotal, que é a forma correta.
-        
-        # Apenas atualizamos a tela
-        self.exibir_produtos()
-        self.atualizar_total() # Esta função irá recalcular tudo corretamente
-        self.produto_var.set("")
+        # Busca o produto no banco de dados para pegar suas informações reais
+        produto_db = buscar_produto_por_sku(sku_devolvido)
+
+        if produto_db:
+            # Pega o preço real do produto do banco de dados
+            preco = float(produto_db['pro_valor'])
+
+            # Cria o dicionário do produto devolvido com preço negativo
+            produto_devolvido = {
+                'id': produto_db['pro_id'],
+                'nome': f"[DEVOLUÇÃO] {produto_db['pro_descricao']}",
+                'codigo': produto_db['pro_sku'],
+                'tamanho': produto_db['pro_tam'],
+                'preco': -preco # O preço é negativo para abater do subtotal
+            }
+            
+            self.produtos_na_venda.append(produto_devolvido)
+            
+            # Apenas atualizamos a tela
+            self.exibir_produtos()
+            self.atualizar_total()
+            self.produto_var.set("")
+        else:
+            messagebox.showerror("Erro", f"Produto com SKU '{sku_devolvido}' não encontrado no banco de dados.", parent=self.janela_pdv)
 
     def obter_valor_restante(self):
         try:
@@ -746,8 +829,13 @@ class TelaPontoVenda:
         except ValueError:
             return 0.0
 
-    def registrar_pagamento(self, forma, valor):
-        self.pagamentos.append((forma, valor))
+    def registrar_pagamento(self, forma, valor, detalhes={}):
+        """Registra um pagamento como um dicionário, incluindo detalhes."""
+        self.pagamentos.append({
+            "forma": forma,
+            "valor": valor,
+            "detalhes": detalhes
+        })
         self.exibir_pagamentos()
 
         self.valor_restante -= valor
@@ -775,12 +863,15 @@ class TelaPontoVenda:
             ))
 
     def exibir_pagamentos(self):
-        self.lista_pagamentos.delete(0, tk.END) # Limpa a lista antes de adicionar
-        texto_pagamentos = "Pagamentos:\n"
-        for forma, valor in self.pagamentos:
-            self.lista_pagamentos.insert(tk.END, f"{forma}: R$ {valor:.2f}")
-        # A linha abaixo que atualizava o label foi removida pois agora usamos a Listbox
-        # self.pagamentos_label.config(text=texto_pagamentos)
+        self.lista_pagamentos.delete(0, tk.END)
+        for pag in self.pagamentos:
+            texto = f"- {pag['forma']}: R$ {pag['valor']:.2f}"
+            detalhes = pag.get('detalhes', {})
+            if pag['forma'] == 'Crédito':
+                texto += f" ({detalhes.get('parcelas')}x {detalhes.get('bandeira')})"
+            elif pag['forma'] == 'Débito':
+                texto += f" ({detalhes.get('bandeira')})"
+            self.lista_pagamentos.insert(tk.END, texto)
 
     def limpar_pagamentos(self):
         self.pagamentos = []
@@ -789,6 +880,7 @@ class TelaPontoVenda:
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
         self.exibir_pagamentos()
         self.label_troco.config(text="")
+        self._limpar_detalhes_pagamento() # Limpa os detalhes do cartão
 
         if self.desconto_aplicado_valor == 0 and hasattr(self, 'entry_desconto'):
             self.entry_desconto.config(state="normal")
@@ -825,6 +917,7 @@ class TelaPontoVenda:
         self.janela_pdv.update_idletasks()
 
     def pagamento_dinheiro(self):
+        self._limpar_detalhes_pagamento()
         valor_str = self.valor_editavel.get()
 
         try:
@@ -838,14 +931,17 @@ class TelaPontoVenda:
             return
 
         valor_restante = self.valor_restante
+        troco = 0.0
 
         if valor_pago >= valor_restante:
+            troco = valor_pago - valor_restante
             self.calcular_troco(valor_pago, valor_restante)
-            self.registrar_pagamento("Dinheiro", valor_restante)
+            detalhes_pagamento = {"troco": troco}
+            self.registrar_pagamento("Dinheiro", valor_restante, detalhes_pagamento)
         else:
             self.label_troco.config(text="")
-            self.registrar_pagamento("Dinheiro", valor_pago)
-
+            self.registrar_pagamento("Dinheiro", valor_pago) # Pagamento parcial, sem detalhes
+    
     def pagamento_debito(self):
         # 1. Pega e valida o valor ANTES de abrir a nova janela
         valor_str = self.valor_editavel.get()
@@ -862,24 +958,24 @@ class TelaPontoVenda:
             messagebox.showerror("Erro", f"O valor do pagamento (R$ {valor_pago:.2f}) não pode ser maior que o valor restante (R$ {self.valor_restante:.2f}).", parent=self.janela_pdv)
             return
 
-        # 2. Abre a janela para selecionar a bandeira
-        top = tk.Toplevel(self.janela_pdv)
-        top.title("Débito")
-        ttk.Label(top, text="Selecione a bandeira:").pack(pady=5)
-        cmb = ttk.Combobox(top, values=self.bandeiras, state="readonly")
-        cmb.pack(pady=5)
+        # 2. Limpa o frame de detalhes e desenha a nova interface
+        self._limpar_detalhes_pagamento()
+        
+        ttk.Label(self.frame_detalhes_pagamento, text="Bandeira:").pack(side=LEFT, padx=5)
+        cmb = ttk.Combobox(self.frame_detalhes_pagamento, values=self.bandeiras, state="readonly", width=15)
+        cmb.pack(side=LEFT, padx=5)
 
         def confirmar():
             bandeira = cmb.get()
             if bandeira:
-                # 3. Usa o 'valor_pago' que foi validado anteriormente
-                self.registrar_pagamento(f"Débito ({bandeira})", valor_pago)
-                top.destroy()
+                detalhes_pagamento = {"bandeira": bandeira}
+                self.registrar_pagamento("Débito", valor_pago, detalhes_pagamento)
+                self._limpar_detalhes_pagamento()
 
-        ttk.Button(top, text="Confirmar", command=confirmar).pack(pady=10)
+        ttk.Button(self.frame_detalhes_pagamento, text="Confirmar", command=confirmar).pack(side=LEFT, padx=5)
 
     def pagamento_credito(self):
-        # 1. Pega e valida o valor ANTES de abrir a nova janela
+        # 1. Pega e valida o valor
         valor_str = self.valor_editavel.get()
         try:
             valor_pago = float(valor_str.replace(",", "."))
@@ -894,28 +990,29 @@ class TelaPontoVenda:
             messagebox.showerror("Erro", f"O valor do pagamento (R$ {valor_pago:.2f}) não pode ser maior que o valor restante (R$ {self.valor_restante:.2f}).", parent=self.janela_pdv)
             return
 
-        # 2. Abre a janela para selecionar bandeira e parcelas
-        top = tk.Toplevel(self.janela_pdv)
-        top.title("Crédito")
-        ttk.Label(top, text="Selecione a bandeira:").pack(pady=5)
-        cmb = ttk.Combobox(top, values=self.bandeiras, state="readonly")
-        cmb.pack(pady=5)
+        # 2. Limpa o frame de detalhes e desenha a nova interface
+        self._limpar_detalhes_pagamento()
 
-        ttk.Label(top, text="Número de parcelas (1 a 6):").pack(pady=5)
-        spin = ttk.Spinbox(top, from_=1, to=6)
-        spin.pack(pady=5)
+        ttk.Label(self.frame_detalhes_pagamento, text="Bandeira:").pack(side=LEFT, padx=5)
+        cmb = ttk.Combobox(self.frame_detalhes_pagamento, values=self.bandeiras, state="readonly", width=12)
+        cmb.pack(side=LEFT, padx=5)
+
+        ttk.Label(self.frame_detalhes_pagamento, text="Parcelas:").pack(side=LEFT, padx=5)
+        spin = ttk.Spinbox(self.frame_detalhes_pagamento, from_=1, to=6, width=5)
+        spin.pack(side=LEFT, padx=5)
 
         def confirmar():
             bandeira = cmb.get()
             parcelas = spin.get()
             if bandeira and parcelas:
-                # 3. Usa o 'valor_pago' que foi validado anteriormente
-                self.registrar_pagamento(f"Crédito {parcelas}x ({bandeira})", valor_pago)
-                top.destroy()
+                detalhes_pagamento = {"bandeira": bandeira, "parcelas": int(parcelas)}
+                self.registrar_pagamento("Crédito", valor_pago, detalhes_pagamento)
+                self._limpar_detalhes_pagamento()
 
-        ttk.Button(top, text="Confirmar", command=confirmar).pack(pady=10)
+        ttk.Button(self.frame_detalhes_pagamento, text="Confirmar", command=confirmar).pack(side=LEFT, padx=5)
 
     def pagamento_pix(self):
+        self._limpar_detalhes_pagamento()
         # 1. Pega o valor do campo de texto, igual no pagamento_dinheiro
         valor_str = self.valor_editavel.get()
         try:
@@ -995,6 +1092,7 @@ class TelaPontoVenda:
             return False
 
     def finalizar_venda(self):
+        # Validações iniciais (se há produtos e se a conta foi paga)
         if self.total_compra < 0 or not self.produtos_na_venda:
             messagebox.showwarning("Venda inválida", "Nenhum produto adicionado.", parent=self.janela_pdv)
             return
@@ -1003,54 +1101,48 @@ class TelaPontoVenda:
             messagebox.showerror("Erro", "Ainda há valor pendente de pagamento.", parent=self.janela_pdv)
             return
 
-        # Monta um dicionário completo com os dados da venda
+        # Monta um dicionário completo com os dados da venda para o banco de dados
         dados_da_venda = {
-            "id": int(datetime.now().timestamp()), # ID único baseado na hora atual
-            "vendedor": self.vendedor_selecionado,
+            "vendedor_id": self.vendedor_selecionado_id,
             "cliente": self.dados_cliente,
             "total": self.total_compra,
-            "produtos": [p['nome'] for p in self.produtos_na_venda], # Pega só os nomes
+            "produtos_obj": self.produtos_na_venda, # Passa a lista completa de objetos de produto
             "pagamentos": self.pagamentos,
-            "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
             "desconto": self.desconto_aplicado_info
+            # O ID da venda e a data serão gerados pelo banco de dados
         }
         
-        # Adiciona a venda à lista central
-        self.lista_de_vendas_global.append(dados_da_venda)
-        
-        print("Venda registrada com sucesso:", dados_da_venda)
-
-        # 1. VERIFICA O CHECKBOX "Imprimir Ticket de Troca"
-        if self.imprimir_ticket_var.get():
+        # Chama a função do CRUD para salvar tudo no banco de dados
+        if salvar_venda_completa(dados_da_venda):
+            # Se a venda foi salva com sucesso no banco...
+            messagebox.showinfo("Sucesso", "Venda registrada no banco de dados!", parent=self.janela_pdv)
             
-            # Se o checkbox estiver marcado, ENTRA NESTE BLOCO para gerar os PDFs
-            data_atual = datetime.now().strftime("%d/%m/%Y")
-            itens_gerados_sucesso = 0
-            total_itens = len(self.tvw_produtos.get_children())
-
-            for item_id in self.tvw_produtos.get_children():
-                valores = self.tvw_produtos.item(item_id)['values']
-                item_info = {
-                    'nome': valores[0],
-                    'codigo': valores[1],
-                    'tamanho': valores[2]
-                }
-                if self.gerar_ticket_troca_pdf(item_info, self.vendedor_selecionado, data_atual):
-                    itens_gerados_sucesso += 1
-
-            # Mostra uma única mensagem de status sobre a geração dos tickets
-            if itens_gerados_sucesso == total_itens:
-                messagebox.showinfo("Sucesso", f"{itens_gerados_sucesso} Ticket(s) de Troca gerados com sucesso!", parent=self.janela_pdv)
-            else:
-                messagebox.showwarning("Atenção", f"Venda finalizada, mas apenas {itens_gerados_sucesso} de {total_itens} Tickets de Troca foram gerados.", parent=self.janela_pdv)
-        
-        self.itens_venda = [p['nome'] for p in self.produtos_na_venda]
-
-        self.tela_resumo_venda()
+            # Gera os tickets de troca, se o checkbox estiver marcado
+            if self.imprimir_ticket_var.get():
+                data_atual = datetime.now().strftime("%d/%m/%Y")
+                
+                # Gerando os múltiplos PDFs dos tickets de troca
+                for produto in self.produtos_na_venda:
+                    if produto['preco'] > 0: # Não gera ticket para devoluções
+                        item_info = {
+                            'nome': produto['nome'],
+                            'codigo': produto['codigo'],
+                            'tamanho': produto['tamanho']
+                        }
+                        self.gerar_ticket_troca_pdf(item_info, self.vendedor_selecionado, data_atual)
+            
+            # Prepara os itens para a tela de resumo
+            self.itens_venda = [p['nome'] for p in self.produtos_na_venda]
+            
+            # Navega para a tela de resumo da venda
+            self.tela_resumo_venda()
+        else:
+            # Se a função do CRUD retornar False, significa que houve um erro
+            messagebox.showerror("Falha", "Não foi possível salvar a venda no banco de dados. Verifique o console para mais detalhes.")
     
     def tela_resumo_venda(self):
         self.limpar_frame()
-        self.frame_atual = ttk.Frame(self.janela_pdv) # Usar self.janela_pdv
+        self.frame_atual = ttk.Frame(self.janela_pdv)
         self.frame_atual.pack(padx=20, pady=20, fill=BOTH, expand=True)
 
         ttk.Label(self.frame_atual, text="Resumo da Venda", font=("Arial", 16)).pack(pady=10)
@@ -1061,17 +1153,29 @@ class TelaPontoVenda:
 
         ttk.Label(self.frame_atual, text="Produtos:", font=("Arial", 12, "bold")).pack(pady=5, anchor="w")
         produtos_list = tk.Listbox(self.frame_atual, height=5)
-        produtos_list.pack()
+        produtos_list.pack(fill=X, expand=True) # Melhorado para preencher o espaço
         for p in self.itens_venda:
             produtos_list.insert(tk.END, p)
 
         ttk.Label(self.frame_atual, text="Pagamentos:", font=("Arial", 12, "bold")).pack(pady=5, anchor="w")
-        pagamentos_list = tk.Listbox(self.frame_atual, height=5)
-        pagamentos_list.pack()
-        for forma, valor in self.pagamentos:
-            pagamentos_list.insert(tk.END, f"{forma}: R$ {valor:.2f}")
+        pagamentos_list = tk.Listbox(self.frame_atual, height=3)
+        pagamentos_list.pack(fill=X, expand=True)
+
+        for pag in self.pagamentos:
+            texto = f"- {pag['forma']}: R$ {pag['valor']:.2f}"
+            detalhes = pag.get('detalhes', {})
+            if pag['forma'] == 'Crédito':
+                texto += f" ({detalhes.get('parcelas')}x {detalhes.get('bandeira')})"
+            elif pag['forma'] == 'Débito':
+                texto += f" ({detalhes.get('bandeira')})"
+            pagamentos_list.insert(tk.END, texto)
 
         ttk.Label(self.frame_atual, text=f"Total Pago: R$ {self.total_compra:.2f}", font=("Arial", 12, "bold")).pack(pady=10, anchor="w")
 
         ttk.Button(self.frame_atual, text="Nova Venda", command=self.tela_selecao_vendedor).pack(pady=10) # Para iniciar uma nova venda, abre outra janela de PDV ou reinicia a atual
         ttk.Button(self.frame_atual, text="Fechar PDV", command=self.janela_pdv.destroy).pack(pady=5) # Adicionado botão para fechar apenas o PDV
+
+    def _limpar_detalhes_pagamento(self):
+        """Função auxiliar para limpar o frame de detalhes."""
+        for widget in self.frame_detalhes_pagamento.winfo_children():
+            widget.destroy()
