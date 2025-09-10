@@ -203,8 +203,6 @@ def buscar_produto_por_sku(sku):
             cursor.close()
             conn.close()
 
-# No arquivo crud.py
-
 def salvar_venda_completa(dados_venda):
     conn = None
     try:
@@ -213,48 +211,43 @@ def salvar_venda_completa(dados_venda):
         cursor = conn.cursor()
         conn.start_transaction()
 
-        # 1. Insere na tabela PEDIDOS (continua igual)
+        # 1. Insere na tabela PEDIDOS (com a nova coluna de desconto)
         cli_id = dados_venda['cliente'].get('id')
         usu_id = dados_venda['vendedor_id']
-        sql_pedido = "INSERT INTO pedidos (cli_id, ped_total, usu_id) VALUES (%s, %s, %s)"
-        cursor.execute(sql_pedido, (cli_id, dados_venda['total'], usu_id))
+        desconto_info = dados_venda.get('desconto', '') # Pega a info do desconto
+
+        sql_pedido = "INSERT INTO pedidos (cli_id, ped_total, usu_id, ped_desconto_info) VALUES (%s, %s, %s, %s)"
+        cursor.execute(sql_pedido, (cli_id, dados_venda['total'], usu_id, desconto_info))
         id_do_pedido = cursor.lastrowid
 
-        # 2. Insere na tabela ITENS_PEDIDO (continua igual)
+        # 2. Insere na tabela ITENS_PEDIDO
         sql_itens = "INSERT INTO itens_pedido (ped_id, pro_id, item_quant, item_valor_unitario) VALUES (%s, %s, %s, %s)"
         for produto in dados_venda['produtos_obj']:
-            if produto['preco'] > 0:
-                valores_item = (id_do_pedido, produto['id'], 1, produto['preco'])
-                cursor.execute(sql_itens, valores_item)
+            valores_item = (id_do_pedido, produto['id'], 1, produto['preco'])
+            cursor.execute(sql_itens, valores_item)
 
         # 3. Insere na tabela PAGAMENTOS e nas tabelas de DETALHES
         for pag in dados_venda['pagamentos']:
-            if pag['valor'] <= 0: continue # Ignora créditos de devolução
-
-            # Insere o pagamento geral
+            if pag['valor'] <= 0: continue
             sql_pagamento = "INSERT INTO pagamentos (ped_id, pag_metodo, pag_valor) VALUES (%s, %s, %s)"
             cursor.execute(sql_pagamento, (id_do_pedido, pag['forma'], pag['valor']))
-            id_do_pagamento = cursor.lastrowid # Pega o ID do pagamento que acabamos de inserir
-
-            # Agora, insere os detalhes na tabela específica
+            id_do_pagamento = cursor.lastrowid
+            
             detalhes = pag.get('detalhes', {})
             if pag['forma'] == 'Crédito':
                 sql_credito = "INSERT INTO credito (pag_id, cre_tipo_cartao, cre_parcelas) VALUES (%s, %s, %s)"
                 cursor.execute(sql_credito, (id_do_pagamento, detalhes.get('bandeira'), detalhes.get('parcelas')))
-            
             elif pag['forma'] == 'Débito':
                 sql_debito = "INSERT INTO debito (pag_id, deb_tipo_cartao) VALUES (%s, %s)"
                 cursor.execute(sql_debito, (id_do_pagamento, detalhes.get('bandeira')))
-            
             elif pag['forma'] == 'Pix':
-                # Por enquanto, salva uma chave de exemplo, pois não temos o campo na tela
                 sql_pix = "INSERT INTO pix (pag_id, pix_chave) VALUES (%s, %s)"
                 cursor.execute(sql_pix, (id_do_pagamento, 'CHAVE_PIX_DA_LOJA'))
-            
             elif pag['forma'] == 'Dinheiro':
                 troco = detalhes.get('troco', 0.0)
                 sql_dinheiro = "INSERT INTO dinheiro (pag_id, din_troco) VALUES (%s, %s)"
                 cursor.execute(sql_dinheiro, (id_do_pagamento, troco))
+
         conn.commit()
         return True
 
@@ -282,6 +275,82 @@ def listar_produto_especifico(pro_sku):
         
     except Exception as e:
         messagebox.showerror("Erro de Banco de Dados", f"Falha ao listar produtos: {e}")
+        return []
+        
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def buscar_vendas_para_relatorio():
+    """Busca e monta um relatório completo de todas as vendas, já tratando dados nulos."""
+    conn = None
+    try:
+        conn = conectar()
+        if not conn: return []
+        
+        cursor = conn.cursor(dictionary=True)
+        
+        sql_principal = """
+            SELECT 
+                p.ped_id, p.ped_data, p.ped_total, p.ped_desconto_info,
+                u.usu_nome AS vendedor,
+                c.cli_nome, c.cli_cpf, c.cli_telefone, c.cli_data_nascimento
+            FROM pedidos p
+            JOIN usuarios u ON p.usu_id = u.usu_id
+            LEFT JOIN clientes c ON p.cli_id = c.cli_id
+            ORDER BY p.ped_data DESC
+        """
+        cursor.execute(sql_principal)
+        vendas = cursor.fetchall()
+        
+        for venda in vendas:
+            sql_itens = """
+                SELECT p.pro_descricao, ip.item_valor_unitario
+                FROM itens_pedido ip
+                JOIN produtos p ON ip.pro_id = p.pro_id
+                WHERE ip.ped_id = %s
+            """
+            cursor.execute(sql_itens, (venda['ped_id'],))
+            itens = cursor.fetchall()
+            
+            # Formata a lista de produtos, adicionando [DEVOLUÇÃO] se o preço for negativo
+            lista_produtos_formatada = []
+            for item in itens:
+                if item['item_valor_unitario'] < 0:
+                    lista_produtos_formatada.append(f"[DEVOLUÇÃO] {item['pro_descricao']}")
+                else:
+                    lista_produtos_formatada.append(item['pro_descricao'])
+            venda['produtos'] = lista_produtos_formatada
+
+            # Busca os pagamentos do pedido
+            sql_pagamentos = "SELECT pag_metodo, pag_valor FROM pagamentos WHERE ped_id = %s"
+            cursor.execute(sql_pagamentos, (venda['ped_id'],))
+            pagamentos = cursor.fetchall()
+            venda['pagamentos'] = [(p['pag_metodo'], p['pag_valor']) for p in pagamentos]
+
+            # Organiza os dados do cliente em um sub-dicionário
+            venda['cliente'] = {
+                'nome': venda.pop('cli_nome') or 'N/A', # Usa 'N/A' se o nome for nulo
+                'cpf': venda.pop('cli_cpf') or '',
+                'telefone': venda.pop('cli_telefone') or '',
+                'nascimento': venda.pop('cli_data_nascimento')
+            }
+            # Formata a data de nascimento para texto, se ela existir
+            if venda['cliente']['nascimento']:
+                venda['cliente']['nascimento'] = venda['cliente']['nascimento'].strftime("%d/%m/%Y")
+            else:
+                venda['cliente']['nascimento'] = '' # Garante que seja uma string vazia
+            
+            # Formata a data do pedido
+            venda['ped_data'] = venda['ped_data'].strftime("%d/%m/%Y %H:%M")
+            # Renomeia a chave do desconto para corresponder ao esperado pela interface
+            venda['desconto'] = venda.pop('ped_desconto_info') or ''
+
+        return vendas
+
+    except Exception as e:
+        messagebox.showerror("Erro de Banco de Dados", f"Falha ao buscar relatório de vendas: {e}")
         return []
         
     finally:

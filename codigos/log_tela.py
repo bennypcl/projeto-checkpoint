@@ -59,7 +59,7 @@ class Tela:
         self.dados_originais = []
         self.novo_item_contador = 0
         self.gerenciador_tema = GerenciadorTema(self.janela)
-        self.tela_relatorio_vendas = TelaRelatorioVendas(self.janela, self.vendas_realizadas)
+        self.tela_relatorio_vendas = TelaRelatorioVendas(self.janela)
         self.tela_consulta = Consultas(self.janela)
         self.tela_venda = TelaPontoVenda(self.janela, self.vendas_realizadas, self.tela_consulta)
         self.relatorio = gerar_relatorio_pdf

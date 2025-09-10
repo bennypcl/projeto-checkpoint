@@ -284,3 +284,5 @@ INSERT INTO produtos (pro_ref, pro_sku, pro_descricao, pro_tam, pro_cor, pro_qua
 VALUES ('P0002', 'S0002', 'Caneca Star Wars', '350ml', 'Indefinida', 0, 49.90, 'imagens_produtos/caneca_star_wars.jpg');
 
 INSERT INTO usuarios (usu_cargo, usu_nome, usu_cpf) VALUES ('Vendedor(a)', 'Troca', '00000000000');
+
+ALTER TABLE pedidos ADD COLUMN ped_desconto_info VARCHAR(50);
