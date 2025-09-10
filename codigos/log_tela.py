@@ -493,22 +493,31 @@ class Tela:
         entry_sku = ttk.Entry(busca_frame, textvariable=sku_var)
         entry_sku.pack(fill='x', pady=5)
         entry_sku.focus_set()
+        sku_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(sku_var, entry_sku))
         btn_buscar = ttk.Button(busca_frame, text="Buscar no Banco de Dados", command=_buscar_sku)
         btn_buscar.pack(pady=5)
         
         manual_frame = ttk.LabelFrame(top, text="Cadastro Manual")
         
         ttk.Label(manual_frame, text="Referência:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
-        ttk.Entry(manual_frame, textvariable=ref_var).grid(row=0, column=1, sticky='ew', padx=5, pady=2)
-        
-        ttk.Label(manual_frame, text="Descrição:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
-        ttk.Entry(manual_frame, textvariable=desc_var).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+        entry_ref = ttk.Entry(manual_frame, textvariable=ref_var)
+        entry_ref.grid(row=0, column=1, sticky='ew', padx=5, pady=2)
+        ref_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(ref_var, entry_ref))
 
-        ttk.Label(manual_frame, text="Tamanho:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
-        ttk.Entry(manual_frame, textvariable=tam_var).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Label(manual_frame, text="Descrição:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        entry_desc = ttk.Entry(manual_frame, textvariable=desc_var)
+        entry_desc.grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+        desc_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(desc_var, entry_desc))
         
+        ttk.Label(manual_frame, text="Tamanho:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
+        entry_tam = ttk.Entry(manual_frame, textvariable=tam_var)
+        entry_tam.grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        tam_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(tam_var, entry_tam))
+
         ttk.Label(manual_frame, text="Cor:").grid(row=3, column=0, sticky='w', padx=5, pady=2)
-        ttk.Entry(manual_frame, textvariable=cor_var).grid(row=3, column=1, sticky='ew', padx=5, pady=2)
+        entry_cor = ttk.Entry(manual_frame, textvariable=cor_var)
+        entry_cor.grid(row=3, column=1, sticky='ew', padx=5, pady=2)
+        cor_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(cor_var, entry_cor))
 
         ttk.Label(manual_frame, text="Quantidade (Estoque):").grid(row=4, column=0, sticky='w', padx=5, pady=2)
         ttk.Entry(manual_frame, textvariable=quant_var).grid(row=4, column=1, sticky='ew', padx=5, pady=2)
