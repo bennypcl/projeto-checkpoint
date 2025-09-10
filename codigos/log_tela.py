@@ -2,9 +2,10 @@ import tkinter as tk
 from tkinter import messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-from tkinter import filedialog, simpledialog
+from tkinter import filedialog, simpledialog, Toplevel, StringVar
 from PIL import Image, ImageTk
 from conexao import conectar
+import crud
 import os
 
 from temas import GerenciadorTema
@@ -179,6 +180,7 @@ class Tela:
         self.tvw_inventario.configure(yscrollcommand=scrollbar_y.set)
         self.tvw_inventario.grid(row=0, column=0, sticky="nsew"); scrollbar_y.grid(row=0, column=1, sticky="ns")
 
+        # AÇÕES
         frm_filtros_acoes = ttk.Frame(frm_controles_e_lista)
         frm_filtros_acoes.grid(row=2, column=0, sticky="ew", pady=(0, 10), padx=5)
         frm_filtros_acoes.columnconfigure(0, weight=1)
@@ -186,6 +188,8 @@ class Tela:
         frm_acoes.columnconfigure(1, weight=1)
         self.lbl_acao = ttk.Label(frm_acoes, text="Ações:"); self.lbl_acao.grid(row=0, column=0, padx=5, pady=5, sticky='w')
         self.btn_add_produto = ttk.Button(frm_acoes, text="Adicionar Novo Produto", command=self.adicionar_produto); self.btn_add_produto.grid(row=0, column=1, padx=5, pady=5, sticky='ew')
+        
+        # FILTROS
         frm_filtros = ttk.Frame(frm_filtros_acoes); frm_filtros.grid(row=1, column=0, sticky="ew")
         self.lbl_visual = ttk.Label(frm_filtros, text="Filtrar Lista:"); self.lbl_visual.pack(side=TOP, anchor="w", padx=5, pady=5)
         frm_botoes_grid = ttk.Frame(frm_filtros); frm_botoes_grid.pack(fill=X, expand=True); frm_botoes_grid.columnconfigure(tuple(range(4)), weight=1)
@@ -212,6 +216,7 @@ class Tela:
     def abrir_tela_relatorio(self):
         if not self.dados_originais:
             messagebox.showwarning("Zero arquivos", "É necessário subir um arquivo para gerar o relatório de divergências.")
+        self.tela_relatorio()
 
     def mostrar_imagem_selecionada(self, event=None):
         selecao = self.tvw_inventario.selection()
@@ -243,6 +248,14 @@ class Tela:
         else:
             self.lbl_imagem_produto.config(image='', text="Produto sem imagem\ncadastrada no banco.")
 
+    def gerar_relatorio(self):
+        if not self.divergencias:
+            messagebox.showwarning("Aviso", "Nenhuma divergência encontrada.")
+            return
+
+        nome_arquivo = gerar_relatorio_pdf(self.divergencias)
+        messagebox.showinfo("Relatório gerado", f"Relatório salvo como:\n{nome_arquivo}")
+
     def upp_arquivo(self):
         caminho_arquivo = filedialog.askopenfilename(title="Selecione o Arquivo de Inventário (.txt)", filetypes=[("Arquivos de texto", "*.txt")])
         if not caminho_arquivo: return
@@ -268,18 +281,126 @@ class Tela:
             messagebox.showerror("Erro de Leitura", f"Não foi possível ler o arquivo:\n{e}")
 
     def adicionar_produto(self):
-        ref = simpledialog.askstring("Novo Produto", "Referência:")
-        if not ref: return
-        sku = simpledialog.askstring("Novo Produto", "SKU:")
-        if not sku: return
-        desc = simpledialog.askstring("Novo Produto", "Descrição:")
-        quant = simpledialog.askinteger("Novo Produto", "Quantidade:")
-        valor = simpledialog.askfloat("Novo Produto", "Valor:")
-        tam = simpledialog.askstring("Novo Produto", "Tamanho:")
-        self.novo_item_contador += 1
-        iid = f"new_{self.novo_item_contador}"
-        self.dados_originais.append([iid, ref, sku, desc, tam, quant, valor, ""])
-        self.filtrar_treeview(None)
+
+        top = Toplevel(self.janela)
+        top.title("Adicionar Novo Produto ao Inventário")
+        top.geometry("400x480")
+        top.resizable(False, False)
+        top.transient(self.janela)
+        top.grab_set()
+
+        # --- Variáveis de controle ---
+        sku_var = StringVar()
+        ref_var = StringVar()
+        desc_var = StringVar()
+        tam_var = StringVar()
+        cor_var = StringVar()
+        preco_var = StringVar()
+        quant_var = StringVar()
+
+        def _buscar_sku():
+            sku = sku_var.get().strip()
+            if not sku:
+                messagebox.showwarning("SKU Inválido", "Por favor, digite um SKU.", parent=top)
+                return
+
+            from crud import listar_produto_especifico
+            produto_encontrado = listar_produto_especifico(sku)
+
+            if produto_encontrado:
+                messagebox.showinfo("Produto Encontrado", f"O produto '{produto_encontrado['pro_descricao']}' será adicionado.", parent=top)
+                
+                self.novo_item_contador += 1
+                iid = f"new_{self.novo_item_contador}"
+
+                self.dados_originais.append([
+                    iid,
+                    produto_encontrado.get('pro_ref', ''),
+                    produto_encontrado.get('pro_sku', sku),
+                    produto_encontrado.get('pro_descricao', ''),
+                    produto_encontrado.get('pro_tam', ''),
+                    produto_encontrado.get('pro_quant', 0),
+                    produto_encontrado.get('pro_valor', 0.0),
+                    ""
+                ])
+                self.filtrar_treeview(None)
+                top.destroy()
+            else:
+                messagebox.showinfo("Produto Não Encontrado", "SKU não existe. Preencha os dados manualmente.", parent=top)
+                manual_frame.pack(fill='x', expand=True, padx=10, pady=10)
+                entry_sku.config(state='disabled')
+                btn_buscar.config(state='disabled')
+        
+        def _adicionar_manualmente():
+            """
+            Coleta os dados, insere no DB usando SUA função, e atualiza o Treeview.
+            """
+            try:
+                # Coleta os dados dos campos
+                ref = ref_var.get().strip()
+                sku = sku_var.get().strip()
+                desc = desc_var.get().strip()
+                tam = tam_var.get().strip()
+                cor = cor_var.get().strip()
+                preco = float(preco_var.get().replace(',', '.'))
+                quant = int(quant_var.get())
+
+                if not all([ref, sku, desc]):
+                    messagebox.showerror("Campos Vazios", "Referência, SKU e Descrição são obrigatórios.", parent=top)
+                    return
+
+                from crud import inserir_produto
+                sucesso_db = inserir_produto(ref, sku, desc, tam, cor, quant, preco)
+
+                if sucesso_db:
+                    self.novo_item_contador += 1
+                    iid = f"new_{self.novo_item_contador}"
+                    
+                    self.dados_originais.append([iid, ref, sku, desc, tam, quant, preco, ""])
+                    self.filtrar_treeview(None)
+                    
+                    messagebox.showinfo("Sucesso", "Produto adicionado ao inventário e salvo no banco de dados.", parent=top)
+                    top.destroy()
+
+            except ValueError:
+                messagebox.showerror("Erro de Valor", "Verifique se 'Preço' e 'Quantidade' são números válidos.", parent=top)
+            except Exception as e:
+                messagebox.showerror("Erro Inesperado", f"Ocorreu um erro: {e}", parent=top)
+
+        # --- Montagem da Interface ---
+        busca_frame = ttk.Frame(top, padding=10)
+        busca_frame.pack(fill='x', padx=10, pady=10)
+        ttk.Label(busca_frame, text="Digite o SKU do produto:").pack(fill='x')
+        entry_sku = ttk.Entry(busca_frame, textvariable=sku_var)
+        entry_sku.pack(fill='x', pady=5)
+        entry_sku.focus_set()
+        btn_buscar = ttk.Button(busca_frame, text="Buscar no Banco de Dados", command=_buscar_sku)
+        btn_buscar.pack(pady=5)
+        
+        manual_frame = ttk.LabelFrame(top, text="Cadastro Manual")
+        
+        ttk.Label(manual_frame, text="Referência:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
+        ttk.Entry(manual_frame, textvariable=ref_var).grid(row=0, column=1, sticky='ew', padx=5, pady=2)
+        
+        ttk.Label(manual_frame, text="Descrição:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        ttk.Entry(manual_frame, textvariable=desc_var).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+
+        ttk.Label(manual_frame, text="Tamanho:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
+        ttk.Entry(manual_frame, textvariable=tam_var).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        
+        ttk.Label(manual_frame, text="Cor:").grid(row=3, column=0, sticky='w', padx=5, pady=2)
+        ttk.Entry(manual_frame, textvariable=cor_var).grid(row=3, column=1, sticky='ew', padx=5, pady=2)
+
+        ttk.Label(manual_frame, text="Quantidade (Estoque):").grid(row=4, column=0, sticky='w', padx=5, pady=2)
+        ttk.Entry(manual_frame, textvariable=quant_var).grid(row=4, column=1, sticky='ew', padx=5, pady=2)
+        
+        ttk.Label(manual_frame, text="Preço (R$):").grid(row=5, column=0, sticky='w', padx=5, pady=2)
+        ttk.Entry(manual_frame, textvariable=preco_var).grid(row=5, column=1, sticky='ew', padx=5, pady=2)
+        
+        manual_frame.columnconfigure(1, weight=1)
+
+        btn_adicionar = ttk.Button(manual_frame, text="Adicionar ao Inventário", command=_adicionar_manualmente)
+        btn_adicionar.grid(row=6, column=0, columnspan=2, pady=10)
 
     def filtrar_treeview(self, criterio_tupla=None):
         self.tvw_inventario.delete(*self.tvw_inventario.get_children())
@@ -354,9 +475,6 @@ class Tela:
                 self.filtrar_treeview(None)
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro na edição: {e}")
-
-    def abrir_tela_relatorio(self):
-        messagebox.showinfo("Relatório", "Função de relatório a ser implementada.")
 
     # Função de contar digitando somente o SKU
     def contar_sku(self, event=None):

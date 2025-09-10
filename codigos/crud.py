@@ -267,3 +267,24 @@ def salvar_venda_completa(dados_venda):
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
+
+def listar_produto_especifico(pro_sku):
+    """Lista um produto específico a partir do SKU"""
+    try:
+        conn = conectar()
+        if not conn: return []
+        
+        cursor = conn.cursor(dictionary=True)
+        query = ("SELECT * FROM produtos where pro_sku = %s")
+        cursor.execute(query, (pro_sku,))
+        produto = cursor.fetchone()
+        return produto
+        
+    except Exception as e:
+        messagebox.showerror("Erro de Banco de Dados", f"Falha ao listar produtos: {e}")
+        return []
+        
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
