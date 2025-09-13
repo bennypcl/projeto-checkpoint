@@ -18,9 +18,7 @@ class GerenciadorTema:
 
         self.temas = {
             'Claro': 'united',
-            'Escuro': 'darkly',
-            'Cyborg': 'cyborg',
-            'Vapor': 'vapor'
+            'Escuro': 'darkly'
         }
 
         frm_temas = ttk.Frame(self.tpl_temas, padding=20)

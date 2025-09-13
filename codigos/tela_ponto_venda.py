@@ -1115,7 +1115,7 @@ class TelaPontoVenda:
         # Chama a função do CRUD para salvar tudo no banco de dados
         if salvar_venda_completa(dados_da_venda):
             # Se a venda foi salva com sucesso no banco...
-            messagebox.showinfo("Sucesso", "Venda registrada no banco de dados!", parent=self.janela_pdv)
+            messagebox.showinfo("Sucesso", "Venda realizada!", parent=self.janela_pdv)
             
             # Gera os tickets de troca, se o checkbox estiver marcado
             if self.imprimir_ticket_var.get():

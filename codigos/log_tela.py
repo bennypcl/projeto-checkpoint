@@ -44,11 +44,10 @@ class Tela:
         self.lbl_senha = ttk.Label(self.log, text='Senha:', font=("Arial", 14))
         self.lbl_senha.grid(row=2, column=0, sticky="w")
         
-        # CONECTANDO O CAMPO DE SENHA À VARIÁVEL
         self.ent_senha = tk.Entry(self.log, show="*", textvariable=self.senha_var)
         self.ent_senha.grid(row=3, column=0, columnspan=2, pady=5, ipady=5, ipadx=14, sticky='EW')
 
-        # OBSERVADOR (TRACE) PARA A SENHA
+        # OBSERVADOR PARA A SENHA
         self.senha_var.trace_add('write',
             lambda *args: self._formatar_para_maiusculo(self.senha_var, self.ent_senha))
         
@@ -110,7 +109,7 @@ class Tela:
             self.menu()
             self.janela.unbind('<Return>')
         else:
-            messagebox.showwarning("Atenção!", "Verificar credenciais.")
+            messagebox.showwarning("Autenticação falhou", "Usuário ou senha incorretos.")
 
     def menu(self):
         self.log.destroy()
@@ -427,7 +426,7 @@ class Tela:
             produto_encontrado = listar_produto_especifico(sku)
 
             if produto_encontrado:
-                messagebox.showinfo("Produto Encontrado", f"O produto '{produto_encontrado['pro_descricao']}' será adicionado.", parent=top)
+                messagebox.showinfo("Sucesso", f"'{produto_encontrado['pro_descricao']}' adicionado.", parent=top)
                 
                 self.novo_item_contador += 1
                 iid = f"new_{self.novo_item_contador}"
@@ -478,7 +477,7 @@ class Tela:
                     self.dados_originais.append([iid, ref, sku, desc, tam, quant, preco, ""])
                     self.filtrar_treeview(None)
                     
-                    messagebox.showinfo("Sucesso", "Produto adicionado ao inventário e salvo no banco de dados.", parent=top)
+                    messagebox.showinfo("Sucesso", f"{desc} adicionado.", parent=top)
                     top.destroy()
 
             except ValueError:
@@ -494,7 +493,7 @@ class Tela:
         entry_sku.pack(fill='x', pady=5)
         entry_sku.focus_set()
         sku_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(sku_var, entry_sku))
-        btn_buscar = ttk.Button(busca_frame, text="Buscar no Banco de Dados", command=_buscar_sku)
+        btn_buscar = ttk.Button(busca_frame, text="Buscar", command=_buscar_sku)
         btn_buscar.pack(pady=5)
         
         manual_frame = ttk.LabelFrame(top, text="Cadastro Manual")
@@ -623,7 +622,7 @@ class Tela:
 
                 valor_a_somar = self.modificador_var.get()
                 
-                # Tenta converter para inteiro e somar 1. Se falhar (ex: campo vazio), começa com 1.
+                # Tenta converter para inteiro e somar 1. Se falhar, começa com 1.
                 try:
                     nova_quantidade = int(est_real_atual) + valor_a_somar
                 except (ValueError, TypeError):
