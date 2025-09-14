@@ -285,4 +285,27 @@ VALUES ('P0002', 'S0002', 'Caneca Star Wars', '350ml', 'Indefinida', 0, 49.90, '
 
 INSERT INTO usuarios (usu_cargo, usu_nome, usu_cpf) VALUES ('Vendedor(a)', 'Troca', '00000000000');
 
+SELECT * FROM pedidos;
+
 ALTER TABLE pedidos ADD COLUMN ped_desconto_info VARCHAR(50);
+
+-- CLIENTES OFICIAIS:
+
+SET SQL_SAFE_UPDATES = 0;
+DELETE FROM clientes;
+ALTER TABLE clientes AUTO_INCREMENT = 1;
+SET SQL_SAFE_UPDATES = 1;
+
+SHOW VARIABLES LIKE 'secure_file_priv';
+
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/clientes.csv' 
+INTO TABLE clientes 
+CHARACTER SET utf8mb4 
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"' 
+LINES TERMINATED BY '\r\n' 
+IGNORE 1 ROWS 
+(cli_cpf, cli_nome, cli_ddd, cli_telefone, @cli_data_nascimento) 
+SET cli_data_nascimento = NULLIF(@cli_data_nascimento, '');
+
+SELECT * FROM clientes;
