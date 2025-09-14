@@ -63,6 +63,10 @@ class Tela:
         self.tela_venda = TelaPontoVenda(self.janela, self.vendas_realizadas, self.tela_consulta)
         self.relatorio = gerar_relatorio_pdf
 
+        self.inventario_iniciado = False
+        self.inventario_modificado = False
+        self.id_inventario_ativo = None
+
     def carregar_mapa_de_imagens(self):
         self.mapa_imagens.clear()
         try:
@@ -108,6 +112,7 @@ class Tela:
             self.carregar_mapa_de_imagens()
             self.menu()
             self.janela.unbind('<Return>')
+            self._carregar_inventario_pendente()
         else:
             messagebox.showwarning("Autenticação falhou", "Usuário ou senha incorretos.")
 
@@ -151,6 +156,11 @@ class Tela:
         
         frm_controle = ttk.Frame(frm_controles_e_lista); frm_controle.grid(row=0, column=0, sticky="ew", pady=(10,0))
         self.btn_ad_arquivo = ttk.Button(frm_controle, text='Carregar Inventário (.txt)', command=self.upp_arquivo); self.btn_ad_arquivo.pack(side=LEFT, padx=5)
+        self.btn_cancelar_inventario = ttk.Button(frm_controle, text='Cancelar Inventário', command=self.cancelar_inventario, bootstyle=SECONDARY)
+        self.btn_cancelar_inventario.pack(side=LEFT, padx=5)
+        self.btn_finalizar_inventario = ttk.Button(frm_controle, text='Finalizar Inventário', command=self.finalizar_inventario, bootstyle=PRIMARY)
+        self.btn_finalizar_inventario.pack(side=LEFT, padx=5)
+        
         self.btn_ad_contagem = ttk.Button(frm_controle, text='Conta Est. por SKU', command=self.contar_sku); self.btn_ad_contagem.pack(side=RIGHT, padx=5)
         self.modificador_var = tk.IntVar(value=1)
         self.spn_modificador = ttk.Spinbox(frm_controle, from_=1, to=10, textvariable=self.modificador_var, width=2); self.spn_modificador.pack(side=RIGHT, padx=2.5)
@@ -209,6 +219,8 @@ class Tela:
 
         self.tvw_inventario.bind("<Double-1>", self.editar_celula)
         self.tvw_inventario.bind('<<TreeviewSelect>>', self.mostrar_imagem_selecionada)
+
+        self._atualizar_estado_botoes_inventario()
         
         self.filtrar_treeview(None)
     
@@ -377,7 +389,9 @@ class Tela:
     def upp_arquivo(self):
         caminho_arquivo = filedialog.askopenfilename(title="Selecione o Arquivo de Inventário (.txt)", filetypes=[("Arquivos de texto", "*.txt")])
         if not caminho_arquivo: return
+
         self.dados_originais.clear()
+
         try:
             with open(caminho_arquivo, "r", encoding="utf-8") as f:
                 for i, linha in enumerate(f):
@@ -394,8 +408,26 @@ class Tela:
                         except ValueError:
                             print(f"AVISO: Linha {i+1} ignorada - valor/quantidade inválido: {linha}")
                             continue
-            self.filtrar_treeview(None)
+
+            #CRIA O INVENTÁRIO NO BANCO
+            self.id_inventario_ativo = crud.criar_novo_inventario(self.dados_originais)
+            
+            if self.id_inventario_ativo:
+                # Se a criação no banco deu certo, atualiza a interface
+                self.inventario_iniciado = True
+                self.inventario_modificado = False
+                self.filtrar_treeview(None)
+                self._atualizar_estado_botoes_inventario()
+            else:
+                # Se a criação no banco falhou, limpa tudo para evitar inconsistência
+                self.dados_originais.clear()
+                self.inventario_iniciado = False
+                self.filtrar_treeview(None)
+                self._atualizar_estado_botoes_inventario()
+
         except Exception as e:
+            self.inventario_iniciado = False
+            self._atualizar_estado_botoes_inventario()
             messagebox.showerror("Erro de Leitura", f"Não foi possível ler o arquivo:\n{e}")
 
     def adicionar_produto(self):
@@ -596,6 +628,9 @@ class Tela:
                 for i, data in enumerate(self.dados_originais):
                     if data[0] == item_iid:
                         self.dados_originais[i][7] = novo_valor
+                        sku_do_item = self.dados_originais[i][2]
+                        crud.atualizar_contagem_item(self.id_inventario_ativo, sku_do_item, novo_valor)
+                        self.inventario_modificado = True #Inventário foi modificado
                         break
                 
                 # Recarrega a treeview para que a lógica de cores seja reaplicada
@@ -603,7 +638,6 @@ class Tela:
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro na edição: {e}")
 
-    # Função de contar digitando somente o SKU
     def contar_sku(self, event=None):
         # Pega o SKU do campo de entrada, remove espaços e o converte para maiúsculo
         sku_a_contar = self.ent_ad_contagem.get().strip().upper()
@@ -630,6 +664,8 @@ class Tela:
                 
                 # Atualiza a quantidade na sua lista de dados principal
                 self.dados_originais[i][7] = nova_quantidade
+                self.inventario_modificado = True
+                crud.atualizar_contagem_item(self.id_inventario_ativo, sku_a_contar, nova_quantidade) #Atualiza em tempo real
                 
                 produto_encontrado = True
                 iid_do_item = item_data[0] # Pega o iid do item para poder selecioná-lo
@@ -652,6 +688,88 @@ class Tela:
         else:
             messagebox.showwarning("SKU não encontrado", f"O SKU '{sku_a_contar}' não foi localizado no inventário carregado.")
             self.ent_ad_contagem.delete(0, "end")
+
+    def finalizar_inventario(self):
+        if not self.inventario_iniciado:
+            return
+        
+        if not self.inventario_modificado:
+            messagebox.showwarning("Nenhuma Alteração", "O inventário não pode ser finalizado, pois nenhuma contagem foi realizada.", parent=self.janela)
+            return
+
+        if crud.finalizar_inventario_db(self.id_inventario_ativo):
+            messagebox.showinfo("Sucesso", "Inventário finalizado e salvo no banco de dados.", parent=self.janela)
+        
+            # Reseta a interface e os status APÓS o sucesso
+            self.dados_originais.clear()
+            self.inventario_iniciado = False
+            self.inventario_modificado = False
+            self.id_inventario_ativo = None # Limpa o ID do inventário ativo
+            self.filtrar_treeview(None)
+            self._atualizar_estado_botoes_inventario()
+
+    def _atualizar_estado_botoes_inventario(self):
+        if self.inventario_iniciado:
+            # Se um inventário está ativo
+            self.btn_ad_arquivo.config(state="disabled")
+            self.btn_finalizar_inventario.config(state="normal")
+            self.btn_cancelar_inventario.config(state="normal") #HABILITA O CANCELAR
+        else:
+            # Se não há inventário
+            self.btn_ad_arquivo.config(state="normal")
+            self.btn_finalizar_inventario.config(state="disabled")
+            self.btn_cancelar_inventario.config(state="disabled") #DESABILITA O CANCELAR
+
+    def cancelar_inventario(self):
+        if not self.inventario_iniciado:
+            return
+
+        resposta = messagebox.askyesno(
+            "Cancelar Inventário",
+            "Você tem certeza que deseja cancelar o inventário atual?\nTodas as alterações feitas serão perdidas.",
+            parent=self.janela
+        )
+
+        if resposta:
+            # Chama a função do CRUD para apagar do banco
+            if crud.cancelar_inventario_db(self.id_inventario_ativo):
+                # Se apagou com sucesso, limpa a interface e os status
+                self.dados_originais.clear()
+                self.inventario_iniciado = False
+                self.inventario_modificado = False
+                self.id_inventario_ativo = None # Limpa o ID do inventário ativo
+                self.filtrar_treeview(None)
+                self._atualizar_estado_botoes_inventario()
+
+    def _carregar_inventario_pendente(self):
+        dados_inventario = crud.buscar_inventario_em_andamento()
+
+        if dados_inventario:
+            self.id_inventario_ativo = dados_inventario['id_inventario']
+            self.inventario_iniciado = True
+            self.dados_originais.clear()
+
+            # Recria a lista self.dados_originais com os dados do banco
+            for i, item in enumerate(dados_inventario['itens']):
+                iid = f"db_{i}"
+                self.dados_originais.append([
+                    iid,
+                    item['pro_ref'],
+                    item['pro_sku'],
+                    item['pro_descricao'],
+                    item['pro_tam'],
+                    item['quantidade_sistema'],
+                    item['pro_valor'],
+                    # Pega a quantidade contada do banco. Se for nula, usa um texto vazio.
+                    item['quantidade_contada'] if item['quantidade_contada'] is not None else ""
+                ])
+            
+            # Verifica se alguma contagem já foi feita para definir o status 'modificado'
+            self.inventario_modificado = any(item['quantidade_contada'] is not None for item in dados_inventario['itens'])
+
+            # Atualiza a interface gráfica
+            self.filtrar_treeview(None)
+            self._atualizar_estado_botoes_inventario()
 
 if __name__ == "__main__":
     janela = ttk.Window(themename='united')

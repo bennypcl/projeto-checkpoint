@@ -274,3 +274,35 @@ IGNORE 1 ROWS
 SET cli_data_nascimento = NULLIF(@cli_data_nascimento, '');
 
 SELECT * FROM clientes;
+
+-- INVENTÁRIOS:
+
+-- TABELA MESTRE PARA REGISTRAR CADA INVENTÁRIO
+CREATE TABLE inventarios (
+    inv_id INT AUTO_INCREMENT PRIMARY KEY,
+    inv_data_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    inv_data_finalizacao TIMESTAMP NULL,
+    inv_status ENUM('Em Andamento', 'Finalizado', 'Cancelado') NOT NULL
+);
+
+-- TABELA DE DETALHES PARA GUARDAR CADA ITEM CONTADO EM UM INVENTÁRIO
+CREATE TABLE inventario_itens (
+    item_inv_id INT AUTO_INCREMENT PRIMARY KEY,
+    inv_id INT NOT NULL,
+    pro_id INT NOT NULL,
+    quantidade_sistema INT NOT NULL,
+    quantidade_contada INT,
+    FOREIGN KEY (inv_id) REFERENCES inventarios(inv_id) ON DELETE CASCADE,
+    FOREIGN KEY (pro_id) REFERENCES produtos(pro_id)
+);
+
+select * from inventarios;
+select * from inventario_itens;
+
+ALTER TABLE inventario_itens 
+MODIFY COLUMN pro_id INT NULL,
+ADD COLUMN item_sku VARCHAR(255),
+ADD COLUMN item_ref VARCHAR(255),
+ADD COLUMN item_descricao VARCHAR(255),
+ADD COLUMN item_tam VARCHAR(255),
+ADD COLUMN item_valor DECIMAL(10,2);

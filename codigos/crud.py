@@ -374,3 +374,177 @@ def buscar_vendas_para_relatorio(vendedor=None, data_inicio=None, data_fim=None)
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
+
+# ====================== INVENTÁRIO ======================
+
+def criar_novo_inventario(lista_produtos_do_arquivo):
+    """Cria um novo registro de inventário e TODOS os seus itens, conhecidos ou não."""
+    conn = None
+    try:
+        conn = conectar()
+        if not conn: return None
+        cursor = conn.cursor()
+        conn.start_transaction()
+
+        cursor.execute("INSERT INTO inventarios (inv_status) VALUES ('Em Andamento')")
+        id_inventario_ativo = cursor.lastrowid
+
+        sql_item = """
+            INSERT INTO inventario_itens 
+            (inv_id, pro_id, quantidade_sistema, item_ref, item_sku, item_descricao, item_tam, item_valor) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        
+        for produto_data in lista_produtos_do_arquivo:
+            ref, sku, desc, tam, quant, valor = produto_data[1], produto_data[2], produto_data[3], produto_data[4], produto_data[5], produto_data[6]
+            
+            cursor.execute("SELECT pro_id FROM produtos WHERE pro_sku = %s", (sku,))
+            resultado_produto = cursor.fetchone()
+            
+            if resultado_produto:
+                # Se o produto existe, salva o pro_id e deixamos os campos de texto nulos
+                pro_id = resultado_produto[0]
+                cursor.execute(sql_item, (id_inventario_ativo, pro_id, quant, None, None, None, None, None))
+            else:
+                # Se o produto NÃO existe, salva pro_id como NULL e guardamos os dados do arquivo
+                cursor.execute(sql_item, (id_inventario_ativo, None, quant, ref, sku, desc, tam, valor))
+
+        conn.commit()
+        return id_inventario_ativo
+
+    except Exception as e:
+        if conn: conn.rollback()
+        messagebox.showerror("Erro de BD", f"Falha ao criar novo inventário: {e}")
+        return None
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def atualizar_contagem_item(id_inventario, sku_produto, nova_quantidade):
+    """Atualiza a quantidade contada de um item, funcionando para produtos conhecidos (com pro_id) e desconhecidos (sem pro_id)."""
+    try:
+        conn = conectar()
+        if not conn: return False
+        cursor = conn.cursor()
+
+        # Tenta encontrar um pro_id para o SKU.
+        cursor.execute("SELECT pro_id FROM produtos WHERE pro_sku = %s", (sku_produto,))
+        resultado_produto = cursor.fetchone()
+
+        if resultado_produto:
+            # Se o produto tem pro_id, atualiza usando o pro_id.
+            pro_id = resultado_produto[0]
+            sql = """
+                UPDATE inventario_itens 
+                SET quantidade_contada = %s 
+                WHERE inv_id = %s AND pro_id = %s
+            """
+            cursor.execute(sql, (nova_quantidade, id_inventario, pro_id))
+        else:
+            # Se o produto não tem pro_id, atualiza usando o item_sku.
+            sql = """
+                UPDATE inventario_itens 
+                SET quantidade_contada = %s 
+                WHERE inv_id = %s AND item_sku = %s AND pro_id IS NULL
+            """
+            cursor.execute(sql, (nova_quantidade, id_inventario, sku_produto))
+
+        conn.commit()
+        
+        if cursor.rowcount > 0:
+            return True
+        else:
+            # Isso pode acontecer se o SKU não for encontrado nem em produtos nem em inventario_itens
+            print(f"AVISO: Nenhuma linha atualizada para o SKU {sku_produto} no inventário {id_inventario}.")
+            return False
+
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao atualizar contagem: {e}")
+        return False
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def finalizar_inventario_db(id_inventario):
+    """Muda o status do inventário para 'Finalizado'."""
+    try:
+        conn = conectar()
+        if not conn: return False
+        cursor = conn.cursor()
+        sql = "UPDATE inventarios SET inv_status = 'Finalizado', inv_data_finalizacao = NOW() WHERE inv_id = %s"
+        cursor.execute(sql, (id_inventario,))
+        conn.commit()
+        return True
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao finalizar inventário: {e}")
+        return False
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def cancelar_inventario_db(id_inventario):
+    """Apaga um registro de inventário e todos os seus itens."""
+    try:
+        conn = conectar()
+        if not conn: return False
+        cursor = conn.cursor()
+        sql = "DELETE FROM inventarios WHERE inv_id = %s"
+        cursor.execute(sql, (id_inventario,))
+        conn.commit()
+        return True
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao cancelar inventário: {e}")
+        return False
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def buscar_inventario_em_andamento():
+    """Busca um inventário em andamento e retorna seus dados, tratando itens conhecidos e desconhecidos."""
+    conn = None
+    try:
+        conn = conectar()
+        if not conn: return None
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT inv_id FROM inventarios WHERE inv_status = 'Em Andamento' LIMIT 1")
+        inventario_ativo = cursor.fetchone()
+
+        if not inventario_ativo:
+            return None
+
+        inv_id = inventario_ativo['inv_id']
+
+        # Query que usa COALESCE para pegar os dados da tabela produtos OU da tabela inventario_itens
+        sql_itens = """
+            SELECT 
+                COALESCE(p.pro_ref, ii.item_ref) AS pro_ref,
+                COALESCE(p.pro_sku, ii.item_sku) AS pro_sku,
+                COALESCE(p.pro_descricao, ii.item_descricao) AS pro_descricao,
+                COALESCE(p.pro_tam, ii.item_tam) AS pro_tam,
+                COALESCE(p.pro_valor, ii.item_valor) AS pro_valor,
+                ii.quantidade_sistema,
+                ii.quantidade_contada
+            FROM inventario_itens ii
+            LEFT JOIN produtos p ON ii.pro_id = p.pro_id
+            WHERE ii.inv_id = %s
+        """
+        cursor.execute(sql_itens, (inv_id,))
+        itens_do_inventario = cursor.fetchall()
+
+        return {
+            "id_inventario": inv_id,
+            "itens": itens_do_inventario
+        }
+
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao buscar inventário em andamento: {e}")
+        return None
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
