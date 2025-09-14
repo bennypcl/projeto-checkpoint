@@ -17,6 +17,8 @@ insert into usuarios (usu_cargo, usu_nome, usu_cpf) values
 ('Vendedor(a)', 'Juliana Souza', '34567890123'),
 ('Vendedor(a)', 'Fernanda Rocha', '56789012345');
 
+INSERT INTO usuarios (usu_cargo, usu_nome, usu_cpf) VALUES ('Vendedor(a)', 'Troca', '00000000000');
+
 -- TABELA DE CLIENTES: Armazena informações dos clientes.
 create table clientes (
 	cli_id int auto_increment primary key,
@@ -35,41 +37,6 @@ create table clientes (
     cli_cidade varchar(100),
     cli_data_cadastro timestamp default current_timestamp -- TIMESTAMP → Tipo de dado que armazena data e hora (formato YYYY-MM-DD HH:MI:SS). DEFAULT CURRENT_TIMESTAMP → Se nenhum valor for inserido, o MySQL preenche automaticamente com a data e hora atuais.
 );
-select * from clientes;
-desc clientes;
-
--- INSERTS de clientes, 30 clientes com CPFs válidos
-insert into clientes (cli_cpf, cli_nome, cli_ddd, cli_telefone, cli_data_nascimento) values 
-    ("92746111002", "Ana Clara Mendes", "11", "912345678", "1995-03-14"),
-    ("81352780066", "Carlos Eduardo Silva", "21", "998765432", "1987-07-22"),
-    ("67425397048", "Beatriz Lima Souza", "31", "987654321", "1992-10-09"),
-    ("53287154010", "Lucas Henrique Almeida", "41", "998811122", "1985-12-01"),
-    ("17896573008", "Juliana Ferreira Costa", "51", "985203344", "1990-05-25"),
-    ("30276469005", "Rafael Gomes Pereira", "61", "993456677", "1988-01-17"),
-    ("62358041091", "Mariana Rocha Martins", "71", "997778899", "1996-11-12"),
-    ("41593226003", "Thiago Oliveira Ramos", "85", "996543210", "1984-06-03"),
-    ("31248019090", "Camila Barros Dias", "95", "991234567", "1993-02-28"),
-    ("28974187074", "Pedro Henrique Castro", "62", "987123345", "1989-08-30"),
-    ("40918236020", "Larissa Souza Pinto", "27", "997891122", "1991-09-19"),
-    ("13924875001", "Felipe Teixeira Moura", "84", "999874455", "1983-05-11"),
-    ("61479043013", "Natália Ribeiro Franco", "91", "994567788", "1994-04-06"),
-    ("30654928027", "Gabriel Monteiro Lira", "98", "996789900", "1990-03-13"),
-    ("47136512006", "Amanda Nogueira Dantas", "83", "993215566", "1992-07-04"),
-    ("21769854094", "Vinícius Castro Neves", "65", "997124412", "1986-10-15"),
-    ("59043167009", "Isabela Fernandes Melo", "82", "998657789", "1997-02-08"),
-    ("70481230080", "Diego Antunes Vieira", "92", "991123434", "1982-12-23"),
-    ("36529411058", "Tatiane Lopes Silva", "13", "999007788", "1990-06-16"),
-    ("23450996045", "Bruno César Tavares", "11", "988762233", "1987-04-20"),
-    ("59137282034", "Fernanda Dias Luz", "43", "991003344", "1993-09-10"),
-    ("84261709007", "Matheus Azevedo Cunha", "71", "993234455", "1991-01-07"),
-    ("73482065096", "Bruna Cavalcanti Reis", "31", "996775566", "1996-11-13"),
-    ("38591741023", "Ricardo Lima Bastos", "85", "999906677", "1984-03-02"),
-    ("63047238055", "Aline Martins Queiroz", "27", "992138899", "1995-08-18"),
-    ("51063890012", "André Luiz Costa", "41", "998761122", "1989-05-29"),
-    ("30487162080", "Patrícia Rocha Vieira", "61", "993345567", "1990-10-21"),
-    ("48591037061", "Henrique Fonseca Braga", "91", "997778899", "1986-06-06"),
-    ("24983760003", "Elaine Bezerra Lima", "51", "988123345", "1992-04-14"),
-    ("71234829050", "Murilo Andrade Pires", "11", "996007788", "1988-07-26");
 
 -- TABELA DE PRODUTOS: Armazena os produtos disponíveis para venda.
 create table produtos (
@@ -282,8 +249,6 @@ VALUES ('P0001', 'S0001', 'Camisetas Batman pdv', 'M', 'Indefinida', 10, 89.90, 
 
 INSERT INTO produtos (pro_ref, pro_sku, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor, pro_caminho_imagem) 
 VALUES ('P0002', 'S0002', 'Caneca Star Wars', '350ml', 'Indefinida', 0, 49.90, 'imagens_produtos/caneca_star_wars.jpg');
-
-INSERT INTO usuarios (usu_cargo, usu_nome, usu_cpf) VALUES ('Vendedor(a)', 'Troca', '00000000000');
 
 SELECT * FROM pedidos;
 
