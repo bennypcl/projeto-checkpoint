@@ -739,6 +739,8 @@ class TelaPontoVenda:
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
 
     def adicionar_produto(self):
+        self._limpar_pagamentos_e_descontos_se_necessario()
+
         sku_digitado = self.produto_var.get()
         if not sku_digitado:
             return
@@ -766,6 +768,8 @@ class TelaPontoVenda:
 
     def remover_produto(self):
         """Remove um produto da venda pelo SKU digitado no campo de produto."""
+        self._limpar_pagamentos_e_descontos_se_necessario()
+
         # Pega o SKU do campo de texto e o formata
         sku_para_remover = self.produto_var.get().strip().upper()
         
@@ -793,6 +797,8 @@ class TelaPontoVenda:
 
     def devolver_produto(self):
         """Busca um produto no banco pelo SKU e o adiciona como devolução."""
+        self._limpar_pagamentos_e_descontos_se_necessario()
+
         sku_devolvido = self.produto_var.get().strip().upper()
         if not sku_devolvido:
             messagebox.showwarning("Atenção", "Digite o SKU do produto a ser devolvido.", parent=self.janela_pdv)
@@ -886,6 +892,12 @@ class TelaPontoVenda:
             self.entry_desconto.config(state="normal")
             self.btn_aplicar_desconto.config(state="normal")
     
+    def _limpar_pagamentos_e_descontos_se_necessario(self):
+        """Verifica se existem pagamentos ou descontos e os limpa, avisando o usuário."""
+        if self.pagamentos or self.desconto_aplicado_valor > 0:
+            self.limpar_desconto()
+            self.limpar_pagamentos()
+
     def limpar_desconto(self):
         # Só faz algo se um desconto estiver ativo
         if self.desconto_aplicado_valor > 0:
@@ -954,7 +966,7 @@ class TelaPontoVenda:
         if valor_pago <= 0:
             messagebox.showerror("Erro", "O valor do pagamento deve ser maior que zero.", parent=self.janela_pdv)
             return
-        if valor_pago > self.valor_restante:
+        if round(valor_pago, 2) > round(self.valor_restante, 2):
             messagebox.showerror("Erro", f"O valor do pagamento (R$ {valor_pago:.2f}) não pode ser maior que o valor restante (R$ {self.valor_restante:.2f}).", parent=self.janela_pdv)
             return
 
@@ -986,7 +998,7 @@ class TelaPontoVenda:
         if valor_pago <= 0:
             messagebox.showerror("Erro", "O valor do pagamento deve ser maior que zero.", parent=self.janela_pdv)
             return
-        if valor_pago > self.valor_restante:
+        if round(valor_pago, 2) > round(self.valor_restante, 2):
             messagebox.showerror("Erro", f"O valor do pagamento (R$ {valor_pago:.2f}) não pode ser maior que o valor restante (R$ {self.valor_restante:.2f}).", parent=self.janela_pdv)
             return
 
@@ -1026,7 +1038,7 @@ class TelaPontoVenda:
             messagebox.showerror("Erro", "O valor do pagamento deve ser maior que zero.", parent=self.janela_pdv)
             return
         # Impede que se pague via pix um valor maior que o devido
-        if valor_pago > self.valor_restante:
+        if round(valor_pago, 2) > round(self.valor_restante, 2):
             messagebox.showerror("Erro", f"O valor do pagamento (R$ {valor_pago:.2f}) não pode ser maior que o valor restante (R$ {self.valor_restante:.2f}).", parent=self.janela_pdv)
             return
         

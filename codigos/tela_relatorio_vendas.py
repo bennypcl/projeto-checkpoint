@@ -8,24 +8,18 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from crud import buscar_vendas_para_relatorio
+from ttkbootstrap.widgets import DateEntry # Importa o widget de calendário
+from crud import buscar_vendas_para_relatorio, listar_usuarios # Importa as funções necessárias
 
 class TelaRelatorioVendas:
     def __init__(self, master):
         self.master = master
         self.janela_relatorio = None
-        self.dados_das_vendas = []
 
     def mostrar_janela(self):
-        self.dados_das_vendas = buscar_vendas_para_relatorio()
-
         if self.janela_relatorio and tk.Toplevel.winfo_exists(self.janela_relatorio):
             self.janela_relatorio.lift()
-            if self.dados_das_vendas:
-                vendedores = sorted(list(set(v['vendedor'] for v in self.dados_das_vendas)))
-                self.cmb_filtro['values'] = ["Mostrar Tudo"] + vendedores
-            self.cmb_filtro.set("Mostrar Tudo")
-            self._filtrar_vendas()
+            self._filtrar_vendas() # Atualiza
             return
         
         self.janela_relatorio = tk.Toplevel(self.master)
@@ -37,25 +31,38 @@ class TelaRelatorioVendas:
         frame_principal.rowconfigure(1, weight=1)
         frame_principal.columnconfigure(0, weight=1)
 
-        frame_filtros = ttk.Frame(frame_principal)
+        # --- Filtros (Topo) ---
+        frame_filtros = ttk.LabelFrame(frame_principal, text="Filtros", padding=10)
         frame_filtros.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         
-        ttk.Label(frame_filtros, text="Visualizar:", font="-weight bold").pack(side=LEFT, padx=(0, 5))
+        ttk.Label(frame_filtros, text="Vendedor:").pack(side=LEFT, padx=(0, 5))
         
-        if self.dados_das_vendas:
-            vendedores_com_venda = sorted(list(set(v['vendedor'] for v in self.dados_das_vendas)))
-            opcoes_filtro = ["Mostrar Tudo"] + vendedores_com_venda
-        else:
-            opcoes_filtro = ["Mostrar Tudo"]
+        # Popula o filtro de vendedores
+        vendedores = [u['usu_nome'] for u in listar_usuarios()]
+        opcoes_filtro = ["Mostrar Tudo"] + sorted(vendedores)
         
         self.cmb_filtro = ttk.Combobox(frame_filtros, values=opcoes_filtro, state="readonly")
-        self.cmb_filtro.pack(side=LEFT)
+        self.cmb_filtro.pack(side=LEFT, padx=(0, 15))
         self.cmb_filtro.set("Mostrar Tudo")
-        self.cmb_filtro.bind("<<ComboboxSelected>>", self._filtrar_vendas)
 
-        btn_pdf = ttk.Button(frame_filtros, text="Baixar PDF do Relatório", command=self.gerar_relatorio_completo_pdf, bootstyle=PRIMARY)
-        btn_pdf.pack(side=RIGHT)
+        #self.cmb_filtro = ttk.Combobox(frame_filtros, values=opcoes_filtro, state="readonly")
+        #self.cmb_filtro.pack(side=LEFT)
+        #self.cmb_filtro.set("Mostrar Tudo")
+        #self.cmb_filtro.bind("<<ComboboxSelected>>", self._filtrar_vendas)
+        
+        # --- CAMPOS DE DATA ---
+        ttk.Label(frame_filtros, text="De:").pack(side=LEFT, padx=(0, 5))
+        self.date_inicio = DateEntry(frame_filtros, bootstyle=PRIMARY, dateformat="%d/%m/%Y")
+        self.date_inicio.pack(side=LEFT, padx=(0, 10))
 
+        ttk.Label(frame_filtros, text="Até:").pack(side=LEFT, padx=(0, 5))
+        self.date_fim = DateEntry(frame_filtros, bootstyle=PRIMARY, dateformat="%d/%m/%Y")
+        self.date_fim.pack(side=LEFT, padx=(0, 20))
+        
+        btn_buscar = ttk.Button(frame_filtros, text="Buscar", command=self._filtrar_vendas, bootstyle=PRIMARY)
+        btn_buscar.pack(side=LEFT)
+        
+        #Área Rolável
         canvas = tk.Canvas(frame_principal, highlightthickness=0)
         scrollbar = ttk.Scrollbar(frame_principal, orient="vertical", command=canvas.yview)
         self.scrollable_frame = ttk.Frame(canvas, padding=10)
@@ -69,16 +76,37 @@ class TelaRelatorioVendas:
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.grid(row=1, column=0, sticky="nsew")
         scrollbar.grid(row=1, column=1, sticky="ns")
-      
-        self._popular_relatorio(self.dados_das_vendas)
+        
+        #Totais e Botão PDF
+        frame_rodape = ttk.LabelFrame(frame_principal, text="Resumo do Relatório", padding=10)
+        frame_rodape.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        self.lbl_total_vendas = ttk.Label(frame_rodape, text="Total de Vendas: 0", font="-weight bold")
+        self.lbl_total_vendas.pack(side=LEFT, padx=10)
+        self.lbl_valor_arrecadado = ttk.Label(frame_rodape, text="Valor Arrecadado: R$ 0.00", font="-weight bold")
+        self.lbl_valor_arrecadado.pack(side=LEFT, padx=10)
+        
+        btn_pdf = ttk.Button(frame_rodape, text="Baixar PDF do Relatório", command=self.gerar_relatorio_completo_pdf)
+        btn_pdf.pack(side=RIGHT, padx=10)
+
+        # Inicia a tela com uma busca inicial (sem filtros)
+        self._filtrar_vendas()
 
     def _filtrar_vendas(self, event=None):
-        selecao = self.cmb_filtro.get()
-        if selecao == "Mostrar Tudo":
-            dados_filtrados = self.dados_das_vendas
-        else:
-            dados_filtrados = [v for v in self.dados_das_vendas if v['vendedor'] == selecao]
-        self._popular_relatorio(dados_filtrados)
+        """Coleta os filtros da tela, busca no banco e manda popular o relatório."""
+        vendedor = self.cmb_filtro.get()
+        
+        data_inicio_br = self.date_inicio.entry.get()
+        data_fim_br = self.date_fim.entry.get()
+        
+        #Converte a data pro bd
+        data_inicio_sql = datetime.strptime(data_inicio_br, "%d/%m/%Y").strftime("%Y-%m-%d")
+        data_fim_sql = datetime.strptime(data_fim_br, "%d/%m/%Y").strftime("%Y-%m-%d")
+
+        # Busca os dados no banco de dados com os filtros e datas já formatadas
+        self.dados_filtrados = buscar_vendas_para_relatorio(vendedor, data_inicio_sql, data_fim_sql)
+        
+        # Popula a tela com os dados encontrados
+        self._popular_relatorio(self.dados_filtrados)
 
     def _popular_relatorio(self, dados_das_vendas):
         for widget in self.scrollable_frame.winfo_children():
@@ -122,14 +150,20 @@ class TelaRelatorioVendas:
             ttk.Separator(self.scrollable_frame, orient=HORIZONTAL).grid(row=row_counter, column=0, columnspan=4, sticky="ew", pady=15)
             row_counter += 1
 
+        # Atualiza o rodapé com os totais do filtro atual
+        total_arrecadado = sum(v['ped_total'] for v in dados_das_vendas)
+        self.lbl_total_vendas.config(text=f"Total de Vendas: {len(dados_das_vendas)}")
+        self.lbl_valor_arrecadado.config(text=f"Valor Arrecadado: R$ {total_arrecadado:.2f}")
+
     def gerar_relatorio_completo_pdf(self):
-        selecao = self.cmb_filtro.get()
-        if selecao == "Mostrar Tudo":
-            dados_para_pdf = self.dados_das_vendas
-            titulo_filtro = "Todas as Vendas"
-        else:
-            dados_para_pdf = [v for v in self.dados_das_vendas if v['vendedor'] == selecao]
-            titulo_filtro = f"Vendas por: {selecao}"
+        dados_para_pdf = self.dados_filtrados
+        
+        # Define o título do PDF com base nos filtros aplicados
+        vendedor_selecionado = self.cmb_filtro.get()
+        data_inicio = self.date_inicio.entry.get()
+        data_fim = self.date_fim.entry.get()
+        
+        titulo_filtro = f"Vendedor: {vendedor_selecionado} | Período: {data_inicio} a {data_fim}"
 
         if not dados_para_pdf:
             messagebox.showwarning("Atenção", "Nenhuma venda para gerar no relatório.", parent=self.janela_relatorio)
@@ -152,7 +186,6 @@ class TelaRelatorioVendas:
                 if not cliente or not cliente.get('cpf'):
                     texto_cliente = "Cliente não identificado"
                 else:
-                    # A lógica aqui também fica mais simples, pois os dados já estão formatados
                     info_list = [f"<b>Cliente:</b> {cliente.get('nome', 'N/A')}"]
                     if cliente.get('cpf'): info_list.append(f"<b>CPF:</b> {cliente.get('cpf')}")
                     if cliente.get('telefone'): info_list.append(f"<b>Telefone:</b> {cliente.get('telefone')}")
@@ -163,7 +196,6 @@ class TelaRelatorioVendas:
                 texto_pagamentos = "<br/>".join([f"- {forma}: R$ {valor:.2f}" for forma, valor in venda['pagamentos']])
                 texto_desconto = venda.get('desconto', '')
                 
-                # A data do pedido agora já vem formatada como texto
                 data_formatada = venda['ped_data']
                 
                 dados_tabela = [

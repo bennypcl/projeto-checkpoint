@@ -282,8 +282,8 @@ def listar_produto_especifico(pro_sku):
             cursor.close()
             conn.close()
 
-def buscar_vendas_para_relatorio():
-    """Busca e monta um relatório completo de todas as vendas, já tratando dados nulos."""
+def buscar_vendas_para_relatorio(vendedor=None, data_inicio=None, data_fim=None):
+    """Busca e monta um relatório de vendas, com filtros opcionais."""
     conn = None
     try:
         conn = conectar()
@@ -291,7 +291,9 @@ def buscar_vendas_para_relatorio():
         
         cursor = conn.cursor(dictionary=True)
         
-        sql_principal = """
+        # --- LÓGICA DE FILTRO DINÂMICO ---
+        params = []
+        sql_base = """
             SELECT 
                 p.ped_id, p.ped_data, p.ped_total, p.ped_desconto_info,
                 u.usu_nome AS vendedor,
@@ -299,9 +301,24 @@ def buscar_vendas_para_relatorio():
             FROM pedidos p
             JOIN usuarios u ON p.usu_id = u.usu_id
             LEFT JOIN clientes c ON p.cli_id = c.cli_id
-            ORDER BY p.ped_data DESC
+            WHERE 1=1
         """
-        cursor.execute(sql_principal)
+        
+        if vendedor and vendedor != "Mostrar Tudo":
+            sql_base += " AND u.usu_nome = %s"
+            params.append(vendedor)
+        
+        if data_inicio:
+            sql_base += " AND DATE(p.ped_data) >= %s"
+            params.append(data_inicio)
+        
+        if data_fim:
+            sql_base += " AND DATE(p.ped_data) <= %s"
+            params.append(data_fim)
+            
+        sql_base += " ORDER BY p.ped_data DESC"
+        
+        cursor.execute(sql_base, tuple(params))
         vendas = cursor.fetchall()
         
         for venda in vendas:
