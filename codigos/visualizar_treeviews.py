@@ -2,54 +2,68 @@ import tkinter as tk
 from tkinter import ttk
 import ttkbootstrap as ttkb
 from conexao import conectar
-from crud import listar_produtos
+from crud import listar_produtos, listar_clientes
 from ttkbootstrap.constants import *
 
 class Consultas:
     def __init__(self, master):
-        self.master = master # Referência à janela principal (log_tela)
+        self.master = master
         self.janela_selecao_produto = None
         self._callback_selecao = None
+        self._is_formatting = False
 
     def _criar_janela_selecao_produto(self, parent):
         """Função interna para criar a interface da janela de seleção apenas uma vez."""
         top = tk.Toplevel(parent)
         top.title("Consultar e Selecionar Produto")
-        top.geometry("800x600")
+        top.geometry("900x600")
         top.transient(parent)
 
-        # Treeview para mostrar os produtos
-        colunas = ('sku', 'descricao', 'tamanho', 'preco', 'quant')
+        frame_busca = ttk.Frame(top, padding=(10, 10, 10, 0))
+        frame_busca.pack(fill=X)
+        ttk.Label(frame_busca, text="Buscar:").pack(side=LEFT, padx=(0, 5))
+
+        search_var = tk.StringVar()
+        entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
+        entry_busca.pack(fill=X, expand=True)
+        entry_busca.focus_set()
+        search_var.trace_add('write', 
+            lambda *args: self._formatar_para_maiusculo(search_var, entry_busca))
+
+        colunas = ('ref', 'sku', 'descricao', 'tamanho', 'preco', 'quant')
         tree = ttk.Treeview(top, columns=colunas, show="headings")
         tree.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
-        tree.heading('sku', text='SKU')
-        tree.column('sku', width=100)
-        tree.heading('descricao', text='Descrição')
-        tree.column('descricao', width=350)
-        
-        tree.heading('tamanho', text='Tamanho')
-        tree.column('tamanho', width=80, anchor="center")        
-        tree.heading('preco', text='Preço')
-        tree.column('preco', width=100, anchor="e")
-        tree.heading('quant', text='Estoque')
-        tree.column('quant', width=100, anchor="center")
+        tree.heading('ref', text='Referência'); tree.column('ref', width=100)
+        tree.heading('sku', text='SKU'); tree.column('sku', width=100)
+        tree.heading('descricao', text='Descrição'); tree.column('descricao', width=350)
+        tree.heading('tamanho', text='Tamanho'); tree.column('tamanho', width=80, anchor="center")
+        tree.heading('preco', text='Preço'); tree.column('preco', width=100, anchor="e")
+        tree.heading('quant', text='Estoque'); tree.column('quant', width=100, anchor="center")
 
-        # Popula o Treeview com dados do banco
-        produtos = listar_produtos()
-        for prod in produtos:
-            tree.insert('', END, values=(
-                prod['pro_sku'], 
-                prod['pro_descricao'], 
-                prod['pro_tam'],
-                f"{prod['pro_valor']:.2f}", 
-                prod['pro_quant']
-            ))
+        produtos_completos = listar_produtos()
+
+        def _filtrar_produtos(event=None):
+            termo_busca = search_var.get() #Pega o texto da StringVar
+            tree.delete(*tree.get_children())
+            
+            for prod in produtos_completos:
+                if (termo_busca in str(prod.get('pro_sku', '')) or
+                    termo_busca in str(prod.get('pro_descricao', '')) or
+                    termo_busca in str(prod.get('pro_ref', ''))):
+                    
+                    tree.insert('', END, values=(
+                        prod['pro_ref'], prod['pro_sku'], prod['pro_descricao'], 
+                        prod['pro_tam'], f"{prod['pro_valor']:.2f}", prod['pro_quant']
+                    ))
+        
+        entry_busca.bind("<KeyRelease>", _filtrar_produtos)
+        _filtrar_produtos()
 
         def confirmar_selecao():
             selecionado = tree.selection()
             if not selecionado: return
-            sku_selecionado = tree.item(selecionado[0])['values'][0]
+            sku_selecionado = tree.item(selecionado[0])['values'][1]
             if self._callback_selecao:
                 self._callback_selecao(sku_selecionado)
             top.grab_release()
@@ -112,71 +126,135 @@ class Consultas:
         tree.pack(fill="both", expand=True)
 
     def visualizar_clientes(self):
-        conexao = conectar()
-        if conexao is None:
-            return
-        cursor = conexao.cursor()
-        try:
-            cursor.execute("SELECT cli_id, cli_nome, cli_cpf, cli_data_nascimento FROM clientes")
-            dados = cursor.fetchall()
-        except Exception as e:
-            print(f"Erro ao executar a consulta de clientes: {e}")
-            return
-        finally:
-            cursor.close()
-            conexao.close()
-
         janela_clientes = ttkb.Toplevel(self.master)
         janela_clientes.title("Visualizar Clientes")
-        janela_clientes.geometry("800x500")
+        janela_clientes.geometry("950x500")
 
-        colunas = ("ID", "Nome", "CPF", "Data de Nascimento")
-        tree = ttk.Treeview(janela_clientes, columns=colunas, show="headings")
+        # --- Frame de Busca ---
+        frame_busca = ttk.Frame(janela_clientes, padding=(10, 10, 10, 0))
+        frame_busca.pack(fill=X)
+        ttk.Label(frame_busca, text="Buscar:").pack(side=LEFT, padx=(0, 5))
 
-        for col in colunas:
-            tree.heading(col, text=col)
-            tree.column(col, anchor="center")
+        search_var = tk.StringVar()
+        entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
+        entry_busca.pack(fill=X, expand=True)
+        entry_busca.focus_set()
+        search_var.trace_add('write',
+            lambda *args: self._formatar_para_maiusculo(search_var, entry_busca))
 
-        for linha in dados:
-            tree.insert("", "end", values=linha)
+        # --- Frame do Treeview ---
+        frame_tree = ttk.Frame(janela_clientes)
+        frame_tree.pack(fill="both", expand=True, padx=10, pady=10)
 
-        tree.pack(fill="both", expand=True)
+        colunas = ("CPF", "Nome", "Telefone", "Nascimento")
+        tree = ttk.Treeview(frame_tree, columns=colunas, show="headings")
+
+        tree.heading("CPF", text="CPF"); tree.column("CPF", anchor="center", width=140)
+        tree.heading("Nome", text="Nome"); tree.column("Nome", anchor="w", width=300)
+        tree.heading("Telefone", text="Telefone"); tree.column("Telefone", anchor="center", width=150)
+        tree.heading("Nascimento", text="Data de Nascimento"); tree.column("Nascimento", anchor="center", width=150)
+
+        tree.pack(side=LEFT, fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(frame_tree, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=RIGHT, fill="y")
+        
+        clientes_completos = listar_clientes()
+
+        def _filtrar_clientes(event=None):
+            termo_busca = search_var.get()
+            termo_busca_numeros = "".join(filter(str.isdigit, termo_busca))
+            tree.delete(*tree.get_children())
+
+            for cliente in clientes_completos:
+                #Formatação
+                cpf_raw = str(cliente.get('cli_cpf', ''))
+                cpf_formatado = f"{cpf_raw[:3]}.{cpf_raw[3:6]}.{cpf_raw[6:9]}-{cpf_raw[9:]}" if len(cpf_raw) == 11 else cpf_raw
+                
+                ddd = str(cliente.get('cli_ddd', ''))
+                tel = str(cliente.get('cli_telefone', ''))
+                telefone_formatado = ""
+                if ddd and tel:
+                    if len(tel) == 9:
+                        telefone_formatado = f"({ddd}) {tel[:5]}-{tel[5:]}"
+                    else:
+                        telefone_formatado = f"({ddd}) {tel[:4]}-{tel[4:]}"
+
+                data_nasc_obj = cliente.get('cli_data_nascimento')
+                data_nasc_formatada = data_nasc_obj.strftime('%d/%m/%Y') if data_nasc_obj else ""
+                
+                nome_original = str(cliente.get('cli_nome', ''))
+                telefone_numeros = ddd + tel
+
+                if (termo_busca in nome_original or
+                    (termo_busca_numeros and termo_busca_numeros in cpf_raw) or
+                    (termo_busca_numeros and termo_busca_numeros in telefone_numeros)):
+                    
+                    valores = (
+                        cpf_formatado,
+                        nome_original,
+                        telefone_formatado,
+                        data_nasc_formatada
+                    )
+                    tree.insert("", "end", values=valores)
+        
+        entry_busca.bind("<KeyRelease>", _filtrar_clientes)
+        _filtrar_clientes()
 
     def visualizar_produtos(self):
-        conexao = conectar()
-        if conexao is None:
-            return
-        cursor = conexao.cursor()
-        try:
-            cursor.execute("SELECT pro_id, pro_ref, pro_sku, pro_descricao, pro_tam, pro_quant, pro_valor FROM produtos")
-            dados = cursor.fetchall()
-        except Exception as e:
-            print(f"Erro ao executar a consulta de produtos: {e}")
-            return
-        finally:
-            cursor.close()
-            conexao.close()
-
         janela_produtos = ttkb.Toplevel(self.master)
         janela_produtos.title("Visualizar Produtos")
         janela_produtos.geometry("900x700")
 
+        frame_busca = ttk.Frame(janela_produtos, padding=(10, 10, 10, 0))
+        frame_busca.pack(fill=X)
+        ttk.Label(frame_busca, text="Buscar:").pack(side=LEFT, padx=(0, 5))
+        
+        search_var = tk.StringVar()
+        entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
+        entry_busca.pack(fill=X, expand=True)
+        entry_busca.focus_set()
+        search_var.trace_add('write',
+            lambda *args: self._formatar_para_maiusculo(search_var, entry_busca))
+
+        frame_tree = ttk.Frame(janela_produtos)
+        frame_tree.pack(fill="both", expand=True, padx=10, pady=10)
+
         colunas = ("ID", "Ref", "SKU", "Descrição", "Tamanho", "Quantidade", "Valor")
-        tree = ttk.Treeview(janela_produtos, columns=colunas, show="headings")
+        tree = ttk.Treeview(frame_tree, columns=colunas, show="headings")
 
         for col in colunas:
             tree.heading(col, text=col)
-            # Ajuste para a coluna Descrição ser maior
             if col == "Descrição":
                 tree.column(col, anchor="w", width=300)
             else:
                 tree.column(col, anchor="center", width=100)
 
+        tree.pack(side=LEFT, fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(frame_tree, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=RIGHT, fill="y")
+        
+        produtos_completos = listar_produtos()
 
-        for linha in dados:
-            tree.insert("", "end", values=linha)
+        def _filtrar_visualizacao(event=None):
+            termo_busca = search_var.get() # Pega o texto da StringVar
+            tree.delete(*tree.get_children())
 
-        tree.pack(fill="both", expand=True)
+            for prod in produtos_completos:
+                if (termo_busca in str(prod.get('pro_ref', '')) or
+                    termo_busca in str(prod.get('pro_sku', '')) or
+                    termo_busca in str(prod.get('pro_descricao', ''))):
+                    
+                    valores = (
+                        prod['pro_id'], prod['pro_ref'], prod['pro_sku'], 
+                        prod['pro_descricao'], prod['pro_tam'], 
+                        prod['pro_quant'], prod['pro_valor']
+                    )
+                    tree.insert("", "end", values=valores)
+        
+        entry_busca.bind("<KeyRelease>", _filtrar_visualizacao)
+        _filtrar_visualizacao()
 
     def visualizar_pedidos(self):
         conexao = conectar()
@@ -327,6 +405,21 @@ class Consultas:
             tree.insert("", "end", values=linha)
 
         tree.pack(fill="both", expand=True)
+
+    def _formatar_para_maiusculo(self, string_var, entry_widget):
+        if self._is_formatting:
+            return
+        self._is_formatting = True
+        
+        texto = string_var.get()
+        texto_maiusculo = texto.upper()
+        string_var.set(texto_maiusculo)
+        
+        if entry_widget.winfo_exists():
+            entry_widget.after(1, lambda: entry_widget.icursor(len(texto_maiusculo)))
+
+        self._is_formatting = False
+
 
 # Execução de testes
 # if __name__ == "__main__":
