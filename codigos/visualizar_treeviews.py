@@ -128,7 +128,7 @@ class Consultas:
     def visualizar_clientes(self):
         janela_clientes = ttkb.Toplevel(self.master)
         janela_clientes.title("Visualizar Clientes")
-        janela_clientes.geometry("950x500")
+        janela_clientes.state('zoomed')
 
         # --- Frame de Busca ---
         frame_busca = ttk.Frame(janela_clientes, padding=(10, 10, 10, 0))
@@ -204,7 +204,7 @@ class Consultas:
     def visualizar_produtos(self):
         janela_produtos = ttkb.Toplevel(self.master)
         janela_produtos.title("Visualizar Produtos")
-        janela_produtos.geometry("900x700")
+        janela_produtos.state('zoomed')
 
         frame_busca = ttk.Frame(janela_produtos, padding=(10, 10, 10, 0))
         frame_busca.pack(fill=X)

@@ -548,3 +548,67 @@ def buscar_inventario_em_andamento():
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
+
+def listar_inventarios_finalizados(data_inicio=None, data_fim=None):
+    """Busca no banco uma lista de todos os inventários com status 'Finalizado'."""
+    conn = None
+    try:
+        conn = conectar()
+        if not conn: return []
+        cursor = conn.cursor(dictionary=True)
+
+        params = []
+        sql = "SELECT inv_id, inv_data_inicio, inv_data_finalizacao FROM inventarios WHERE inv_status = 'Finalizado'"
+
+        if data_inicio:
+            sql += " AND DATE(inv_data_inicio) >= %s"
+            params.append(data_inicio)
+        if data_fim:
+            sql += " AND DATE(inv_data_finalizacao) <= %s"
+            params.append(data_fim)
+        
+        sql += " ORDER BY inv_data_inicio DESC"
+
+        cursor.execute(sql, tuple(params))
+        inventarios = cursor.fetchall()
+        return inventarios
+
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao listar inventários finalizados: {e}")
+        return []
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def buscar_detalhes_inventario(inv_id):
+    """Busca todos os itens de um inventário específico pelo seu ID."""
+    conn = None
+    try:
+        conn = conectar()
+        if not conn: return {}
+        cursor = conn.cursor(dictionary=True)
+        
+        sql = """
+            SELECT 
+                COALESCE(p.pro_ref, ii.item_ref) AS ref,
+                COALESCE(p.pro_sku, ii.item_sku) AS sku,
+                COALESCE(p.pro_descricao, ii.item_descricao) AS `desc`,
+                COALESCE(p.pro_tam, ii.item_tam) AS tam,
+                ii.quantidade_sistema AS est,
+                ii.quantidade_contada AS est_real
+            FROM inventario_itens ii
+            LEFT JOIN produtos p ON ii.pro_id = p.pro_id
+            WHERE ii.inv_id = %s
+        """
+        cursor.execute(sql, (inv_id,))
+        itens = cursor.fetchall()
+        return itens
+
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao buscar detalhes do inventário: {e}")
+        return {}
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()

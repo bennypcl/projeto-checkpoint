@@ -128,7 +128,7 @@ class Tela:
         self.mnu_configuracao = tk.Menu(self.mnu_principal, tearoff=0); self.mnu_principal.add_cascade(label='Configurações', menu=self.mnu_configuracao)
         self.mnu_configuracao.add_command(label='Temas', command=self.gerenciador_tema.mudar_tema)
         self.mnu_relatorios = tk.Menu(self.mnu_principal, tearoff=0); self.mnu_principal.add_cascade(label='Relatórios', menu=self.mnu_relatorios)
-        self.mnu_relatorios.add_command(label='Divergências', command=self.abrir_tela_relatorio)
+        self.mnu_relatorios.add_command(label='Inventários', command=self.abrir_tela_lista_inventarios)
         self.mnu_relatorios.add_command(label='Vendas', command=self.tela_relatorio_vendas.mostrar_janela)
 
         self.mnu_treeviews = tk.Menu(self.mnu_principal, tearoff=0)
@@ -224,10 +224,25 @@ class Tela:
         
         self.filtrar_treeview(None)
     
-    def abrir_tela_relatorio(self):
-        if not self.dados_originais:
-            messagebox.showwarning("Zero arquivos", "É necessário subir um arquivo para gerar o relatório de divergências.")
-        else: self.tela_relatorio()
+    def abrir_tela_relatorio(self, inventario_id=None):
+        # Se nenhum ID for passado, usa o inventário ativo. Se for passado, usa o histórico.
+        dados_para_relatorio = []
+        if inventario_id:
+            # Busca os detalhes de um inventário histórico
+            dados_para_relatorio = crud.buscar_detalhes_inventario(inventario_id)
+        else:
+            # Usa os dados do inventário atualmente carregado na tela principal
+            if not self.dados_originais:
+                messagebox.showwarning("Sem Dados", "Nenhum inventário ativo carregado para gerar o relatório.")
+                return
+            # Converte o formato de self.dados_originais para o formato esperado
+            for item in self.dados_originais:
+                dados_para_relatorio.append({
+                    "ref": item[1], "sku": item[2], "desc": item[3], "tam": item[4], 
+                    "est": item[5], "est_real": item[7]
+                })
+
+        self.tela_relatorio(dados_para_relatorio) # Chama a função que constrói a tela
 
     def mostrar_imagem_selecionada(self, event=None):
         selecao = self.tvw_inventario.selection()
@@ -272,7 +287,7 @@ class Tela:
         try:
             # 2. Chama a função que gera o PDF e captura o nome do arquivo
             # self.relatorio é o seu gerar_relatorio_pdf
-            nome_arquivo = self.relatorio(self.divergencias, self.negativados, self.pdvs)
+            nome_arquivo = self.relatorio(self.divergencias, self.negativados, self.pdvs, self.zerados)
 
             # 3. Exibe a mensagem de sucesso
             messagebox.showinfo("Sucesso", f"Relatório salvo com sucesso como:\n{nome_arquivo}")
@@ -291,9 +306,10 @@ class Tela:
         nome_arquivo = gerar_relatorio_pdf(self.divergencias)
         messagebox.showinfo("Relatório gerado", f"Relatório salvo como:\n{nome_arquivo}")
     
-    def tela_relatorio(self):
+    def tela_relatorio(self, dados_inventario):
         self.tpl_relatorios = tk.Toplevel(self.tpl_menu)
         self.tpl_relatorios.title("Relatório de Divergências")
+        self.tpl_relatorios.state('zoomed')
 
         self.frm_principal_relDivergencia = ttk.Frame(self.tpl_relatorios, padding=10)
         self.frm_principal_relDivergencia.pack(fill=BOTH, expand=True)
@@ -301,90 +317,65 @@ class Tela:
         self.divergencias = []
         self.negativados = []
         self.pdvs = []
+        self.zerados = []
 
         def criar_treeview(rotulo, dados):
             ttk.Label(self.frm_principal_relDivergencia, text=rotulo, font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 0))
-
             frame_tv = ttk.Frame(self.frm_principal_relDivergencia)
             frame_tv.pack(fill=BOTH, expand=True)
 
             colunas = ("ref", "sku", "desc", "tam", "est", "est_real")
-            tree = ttk.Treeview(frame_tv, columns=colunas, show="headings", height=8)
+            tree = ttk.Treeview(frame_tv, columns=colunas, show="headings", height=5)
 
-            # Configura colunas
-            for col, txt, width, align in [
-                ("ref", "Ref", 70, CENTER),
-                ("sku", "SKU", 70, CENTER),
-                ("desc", "Descrição", 300, "w"),
-                ("tam", "Tam/Cap", 100, CENTER),
-                ("est", "Estoque", 100, CENTER),
-                ("est_real", "Est. Real", 100, CENTER)
-            ]:
-                tree.heading(col, text=txt)
-                tree.column(col, width=width, anchor=align)
-
-            # Scrollbar vertical
+            for col, txt, width, align in [("ref", "Ref", 70, CENTER),("sku", "SKU", 70, CENTER),("desc", "Descrição", 300, "w"),("tam", "Tam/Cap", 100, CENTER),("est", "Estoque", 100, CENTER),("est_real", "Est. Real", 100, CENTER)]: 
+                tree.heading(col, text=txt); tree.column(col, width=width, anchor=align)
             scrollbar_y = ttk.Scrollbar(frame_tv, orient="vertical", command=tree.yview)
-            tree.configure(yscrollcommand=scrollbar_y.set)
 
-            # Layout
-            tree.grid(row=0, column=0, sticky="nsew")
-            scrollbar_y.grid(row=0, column=1, sticky="ns")
+            tree.configure(yscrollcommand=scrollbar_y.set)
+            tree.grid(row=0, column=0, sticky="nsew"); scrollbar_y.grid(row=0, column=1, sticky="ns")
             frame_tv.rowconfigure(0, weight=1)
             frame_tv.columnconfigure(0, weight=1)
-
-            # Inserção de dados
-            for item in dados:
+            for item in dados: 
                 tree.insert("", "end", values=item)
-
             return tree
 
-
-        # --- Classificação dos dados ---
-        for item in self.dados_originais:
-            if len(item) < 8:
-                continue
-
-            iid, ref, sku, desc, tam, est, _, est_real = item
+        for item in dados_inventario:
+            ref, sku, desc, tam = item['ref'], item['sku'], item['desc'], item['tam']
+            est, est_real = item['est'], item['est_real']
 
             desc_lower = str(desc).lower()
             est_str = str(est).strip()
-            est_real_str = str(est_real).strip()
 
-            # Verificações
+            est_real_str = str(est_real).strip() if est_real is not None else ""
+
             is_pdv = "pdv" in desc_lower
             is_negativado = False
             is_divergente = False
+            is_zerado = False
+
             try:
                 est_int = int(est)
                 est_real_int = int(est_real) if est_real_str else None
                 is_negativado = est_int < 0
-                is_divergente = est_real_str and (est_int != est_real_int)
-            except:
-                is_divergente = est_real_str and (est_str != est_real_str)
+                is_zerado = est_int == 0
+                is_divergente = est_real_str != "" and (est_int != est_real_int)
+            except (ValueError, TypeError):
+                is_divergente = est_real_str != "" and (est_str != est_real_str)
 
-            valores = (ref, sku, desc, tam, est, est_real)
+            valores = (ref, sku, desc, tam, est, est_real_str)
 
-            if is_divergente:
-                self.divergencias.append(valores)
-            if is_negativado:
-                self.negativados.append(valores)
-            if is_pdv:
-                self.pdvs.append(valores)
+            if is_divergente: self.divergencias.append(valores)
+            if is_negativado: self.negativados.append(valores)
+            if is_pdv: self.pdvs.append(valores)
+            if is_zerado: self.zerados.append(valores)
 
-        # --- Cria Treeviews ---
-        if self.divergencias:
-            self.tvw_divergencias = criar_treeview("Produtos com divergência", self.divergencias)
-        if self.negativados:
-            self.tvw_negativados = criar_treeview("Produtos negativados", self.negativados)
-        if self.pdvs:
-            self.tvw_pdvs = criar_treeview("Produtos PDV", self.pdvs)
-
-        # --- Botão PDF ---
-        ttk.Button(
-            self.frm_principal_relDivergencia,
-            text="Gerar Relatório PDF",
-            command=self._gerar_e_finalizar_relatorio).pack(pady=(20, 0))
+        # --- Cria os Treeviews ---
+        if self.divergencias: self.tvw_divergencias = criar_treeview("Produtos com divergência", self.divergencias)
+        if self.negativados: self.tvw_negativados = criar_treeview("Produtos negativados", self.negativados)
+        if self.zerados: self.tvw_zerados = criar_treeview("Produtos zerados", self.zerados)
+        if self.pdvs: self.tvw_pdvs = criar_treeview("Produtos PDV", self.pdvs)
+        
+        ttk.Button(self.frm_principal_relDivergencia, text="Gerar Relatório PDF", command=self._gerar_e_finalizar_relatorio).pack(pady=(20, 0))
 
     def upp_arquivo(self):
         caminho_arquivo = filedialog.askopenfilename(title="Selecione o Arquivo de Inventário (.txt)", filetypes=[("Arquivos de texto", "*.txt")])
@@ -770,6 +761,85 @@ class Tela:
             # Atualiza a interface gráfica
             self.filtrar_treeview(None)
             self._atualizar_estado_botoes_inventario()
+
+    # Dentro do arquivo: log_tela.py
+
+    def abrir_tela_lista_inventarios(self):
+        top = Toplevel(self.janela)
+        top.title("Histórico de Inventários Finalizados")
+        top.state('zoomed') # Tela já maximizada
+
+        # --- Frame de Filtros por Data ---
+        frame_filtros = ttk.LabelFrame(top, text="Filtrar por Data de Finalização", padding=10)
+        frame_filtros.pack(fill=X, padx=10, pady=10)
+        
+        ttk.Label(frame_filtros, text="De:").pack(side=LEFT, padx=(0, 5))
+        date_inicio = ttk.DateEntry(frame_filtros, bootstyle=PRIMARY, dateformat="%d/%m/%Y")
+        date_inicio.pack(side=LEFT, padx=(0, 10))
+        
+        ttk.Label(frame_filtros, text="Até:").pack(side=LEFT, padx=(0, 5))
+        date_fim = ttk.DateEntry(frame_filtros, bootstyle=PRIMARY, dateformat="%d/%m/%Y")
+        date_fim.pack(side=LEFT, padx=(0, 20))
+
+        def _buscar_e_popular():
+            for item in tree.get_children():
+                tree.delete(item)
+            
+            from datetime import datetime
+            data_inicio_br = date_inicio.entry.get()
+            data_fim_br = date_fim.entry.get()
+            data_i = datetime.strptime(data_inicio_br, "%d/%m/%Y").strftime("%Y-%m-%d")
+            data_f = datetime.strptime(data_fim_br, "%d/%m/%Y").strftime("%Y-%m-%d")
+            
+            lista_inventarios = crud.listar_inventarios_finalizados(data_i, data_f)
+            for inv in lista_inventarios:
+                data_inicio_fmt = inv['inv_data_inicio'].strftime('%d/%m/%Y %H:%M')
+                data_fim_fmt = inv['inv_data_finalizacao'].strftime('%d/%m/%Y %H:%M') if inv.get('inv_data_finalizacao') else "N/A"
+                
+                # REQUISTO 2: Criamos um nome descritivo para cada inventário
+                nome_inventario = f"Inventário - {data_fim_fmt}"
+                
+                # REQUISITO 1: O ID não vai para a tela, mas é usado como identificador interno do item (iid)
+                tree.insert("", END, iid=inv['inv_id'], values=(nome_inventario, data_inicio_fmt, data_fim_fmt))
+
+        btn_buscar = ttk.Button(frame_filtros, text="Buscar", command=_buscar_e_popular, bootstyle=PRIMARY)
+        btn_buscar.pack(side=LEFT)
+
+        # --- Treeview para listar os inventários ---
+        frame_lista = ttk.Frame(top, padding=(10,0,10,10))
+        frame_lista.pack(fill=BOTH, expand=True)
+
+        # REQUISITO 3: Mudamos as colunas para um estilo de "arquivo"
+        colunas = ("nome", "inicio", "fim")
+        tree = ttk.Treeview(frame_lista, columns=colunas, show="headings")
+        tree.heading("nome", text="Nome"); tree.column("nome", width=300)
+        tree.heading("inicio", text="Data de Início"); tree.column("inicio", width=200, anchor=CENTER)
+        tree.heading("fim", text="Data de Finalização"); tree.column("fim", width=200, anchor=CENTER)
+        
+        tree.pack(fill=BOTH, expand=True, side=LEFT)
+        scrollbar = ttk.Scrollbar(frame_lista, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(fill=Y, side=RIGHT)
+
+        def _abrir_relatorio_selecionado(event):
+            selecionado = tree.selection()
+            if not selecionado: return
+            
+            # O ID agora é pego diretamente do item selecionado, e não de uma coluna visível
+            id_inventario = selecionado[0]
+            
+            top.destroy()
+            self.abrir_tela_relatorio(id_inventario)
+
+        tree.bind("<Double-1>", _abrir_relatorio_selecionado)
+        
+        # Popula a lista inicialmente (sem filtro de data)
+        lista_inicial = crud.listar_inventarios_finalizados()
+        for inv in lista_inicial:
+            data_inicio_fmt = inv['inv_data_inicio'].strftime('%d/%m/%Y %H:%M')
+            data_fim_fmt = inv['inv_data_finalizacao'].strftime('%d/%m/%Y %H:%M') if inv.get('inv_data_finalizacao') else "N/A"
+            nome_inventario = f"Inventário - {data_fim_fmt}"
+            tree.insert("", END, iid=inv['inv_id'], values=(nome_inventario, data_inicio_fmt, data_fim_fmt))
 
 if __name__ == "__main__":
     janela = ttk.Window(themename='united')

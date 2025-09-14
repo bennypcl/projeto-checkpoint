@@ -6,7 +6,7 @@ import datetime
 import os
 
 # --- Função Principal ---
-def gerar_relatorio_pdf(divergencias, negativados, pdvs, nome_arquivo=None):
+def gerar_relatorio_pdf(divergencias, negativados, pdvs, zerados=None, nome_arquivo=None):
     """
     Gera um relatório PDF com seções para Divergências, Negativados e PDVs.
     """
@@ -25,9 +25,11 @@ def gerar_relatorio_pdf(divergencias, negativados, pdvs, nome_arquivo=None):
     if divergencias:
         _criar_secao_divergencias(elementos, divergencias)
 
-    # Seções de Negativados e PDVs (formato padrão)
     if negativados:
         _criar_secao_padrao(elementos, "Produtos Negativados", negativados)
+    
+    if zerados:
+        _criar_secao_padrao(elementos, "Produtos Zerados", zerados)
         
     if pdvs:
         _criar_secao_padrao(elementos, "Produtos PDV", pdvs)
