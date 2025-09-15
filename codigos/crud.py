@@ -96,19 +96,24 @@ def listar_clientes():
 
 # ====================== PRODUTOS ======================
 
-def inserir_produto(ref, sku, descricao, tam, cor, quant, valor):
-    """Insere um novo produto na tabela 'produtos'."""
+def inserir_produto(ref, sku, descricao, tam, bipe, valor, caminho_imagem=None):
+    """Insere um novo produto na tabela 'produtos' com a nova estrutura."""
     try:
         conn = conectar()
         if not conn: return False
-        
+
         cursor = conn.cursor()
         sql = """
             INSERT INTO produtos 
-            (pro_ref, pro_sku, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor)
+            (pro_ref, pro_sku, pro_descricao, pro_tam, pro_bipe, pro_valor, pro_caminho_imagem)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
-        valores = (ref, sku, descricao, tam, cor, quant, valor)
+
+        sku = sku if sku else None
+        bipe = bipe if bipe else None
+        valor = float(valor.replace(',', '.')) if valor else None
+
+        valores = (ref, sku, descricao, tam, bipe, valor, caminho_imagem)
         cursor.execute(sql, valores)
         conn.commit()
         return True
@@ -608,6 +613,87 @@ def buscar_detalhes_inventario(inv_id):
     except Exception as e:
         messagebox.showerror("Erro de BD", f"Falha ao buscar detalhes do inventário: {e}")
         return {}
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def adicionar_item_ao_inventario(id_inventario, sku_produto):
+    """Adiciona um único produto a um inventário já em andamento."""
+    try:
+        conn = conectar()
+        if not conn: return False
+        cursor = conn.cursor()
+
+        # Primeiro, busca o pro_id do produto, que já deve existir na tabela 'produtos'
+        cursor.execute("SELECT pro_id, pro_ref, pro_descricao, pro_tam, pro_valor FROM produtos WHERE pro_sku = %s", (sku_produto,))
+        produto = cursor.fetchone()
+
+        if not produto:
+            messagebox.showerror("Erro Interno", f"Não foi possível encontrar o produto com SKU {sku_produto} para adicionar ao inventário.")
+            return False
+
+        pro_id, ref, desc, tam, valor = produto
+
+        # Adiciona o item ao inventário com quantidade de sistema 0, pois não estava no arquivo original
+        sql_item = """
+            INSERT INTO inventario_itens
+            (inv_id, pro_id, quantidade_sistema, item_ref, item_sku, item_descricao, item_tam, item_valor)
+            VALUES (%s, %s, 0, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql_item, (id_inventario, pro_id, ref, sku_produto, desc, tam, valor))
+        conn.commit()
+        return True
+
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao adicionar item ao inventário: {e}")
+        return False
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def buscar_produto_por_sku_ou_bipe(codigo):
+    """
+    Busca um produto pelo SKU ou pelo Bipe (código de barras).
+    Retorna os dados do produto se encontrar, ou None se não encontrar.
+    """
+    if not codigo:
+        return None
+    try:
+        conn = conectar()
+        if not conn: return None
+        cursor = conn.cursor(dictionary=True)
+        
+        # A query agora busca em duas colunas
+        sql = "SELECT * FROM produtos WHERE pro_sku = %s OR pro_bipe = %s"
+        
+        # Passamos o mesmo código para os dois parâmetros
+        cursor.execute(sql, (codigo, codigo))
+        
+        produto = cursor.fetchone()
+        return produto
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao buscar produto por código: {e}")
+        return None
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def atualizar_caminho_imagem_produto(ref_produto, caminho_imagem):
+    """Atualiza o campo pro_caminho_imagem de um produto específico."""
+    try:
+        conn = conectar()
+        if not conn: return False
+        cursor = conn.cursor()
+        sql = "UPDATE produtos SET pro_caminho_imagem = %s WHERE pro_ref = %s"
+        cursor.execute(sql, (caminho_imagem, ref_produto))
+        conn.commit()
+        return True
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao atualizar caminho da imagem: {e}")
+        return False
     finally:
         if conn and conn.is_connected():
             cursor.close()

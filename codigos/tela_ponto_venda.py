@@ -12,7 +12,8 @@ from crud import (
     inserir_cliente, 
     atualizar_cliente, 
     buscar_produto_por_sku, 
-    salvar_venda_completa
+    salvar_venda_completa,
+    buscar_produto_por_sku_ou_bipe
 )
 from crud import listar_usuarios
 
@@ -745,13 +746,14 @@ class TelaPontoVenda:
         if not sku_digitado:
             return
 
-        produto_db = buscar_produto_por_sku(sku_digitado)
+        produto_db = buscar_produto_por_sku_ou_bipe(sku_digitado)
         
         if produto_db:
             novo_produto = {
                 'id': produto_db['pro_id'], # Guarda o ID do produto
                 'nome': produto_db['pro_descricao'],
                 'codigo': produto_db['pro_sku'],
+                'bipe': produto_db.get('pro_bipe'),
                 'tamanho': produto_db['pro_tam'],
                 'preco': float(produto_db['pro_valor'])
             }
@@ -767,28 +769,30 @@ class TelaPontoVenda:
         self.processar_produto_entry()
 
     def remover_produto(self):
-        """Remove um produto da venda pelo SKU digitado no campo de produto."""
+        """Remove um produto da venda pelo SKU ou Bipe digitado."""
         self._limpar_pagamentos_e_descontos_se_necessario()
 
-        # Pega o SKU do campo de texto e o formata
-        sku_para_remover = self.produto_var.get().strip().upper()
+        codigo_para_remover = self.produto_var.get().strip().upper()
         
-        if not sku_para_remover:
-            messagebox.showwarning("Atenção", "Digite o SKU do produto a ser removido da venda.", parent=self.janela_pdv)
+        if not codigo_para_remover:
+            messagebox.showwarning("Atenção", "Digite o SKU ou Bipe do produto a ser removido.", parent=self.janela_pdv)
             return
 
         produto_encontrado = None
-        # Procura o produto na lista da venda atual pelo SKU (que está no campo 'codigo')
+        # Procura o produto na lista da venda atual pelo SKU ou Bipe
         for produto in self.produtos_na_venda:
-            if produto['codigo'].upper() == sku_para_remover:
+            sku_do_produto = produto.get('codigo', '').upper()
+            bipe_do_produto = str(produto.get('bipe', '')).upper() # str() para tratar caso o bipe seja None
+
+            if sku_do_produto == codigo_para_remover or bipe_do_produto == codigo_para_remover:
                 produto_encontrado = produto
                 break
         
         if produto_encontrado:
             self.produtos_na_venda.remove(produto_encontrado)
-            messagebox.showinfo("Sucesso", f"Produto SKU '{sku_para_remover}' removido.", parent=self.janela_pdv)
+            messagebox.showinfo("Sucesso", f"Produto com código '{codigo_para_remover}' removido.", parent=self.janela_pdv)
         else:
-            messagebox.showerror("Erro", f"Produto SKU '{sku_para_remover}' não encontrado na venda atual.", parent=self.janela_pdv)
+            messagebox.showerror("Erro", f"Produto com código '{codigo_para_remover}' não encontrado na venda atual.", parent=self.janela_pdv)
             
         # Atualiza a tela
         self.exibir_produtos()
@@ -805,7 +809,7 @@ class TelaPontoVenda:
             return
 
         # Busca o produto no banco de dados para pegar suas informações reais
-        produto_db = buscar_produto_por_sku(sku_devolvido)
+        produto_db = buscar_produto_por_sku_ou_bipe(sku_devolvido)
 
         if produto_db:
             # Pega o preço real do produto do banco de dados

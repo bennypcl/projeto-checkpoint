@@ -4,79 +4,72 @@ import ttkbootstrap as ttkb
 from conexao import conectar
 from crud import listar_produtos, listar_clientes
 from ttkbootstrap.constants import *
+import os
+from PIL import Image, ImageTk
 
 class Consultas:
-    def __init__(self, master):
+    def __init__(self, master, mapa_imagens): # Adicionado mapa_imagens
         self.master = master
+        self.mapa_imagens = mapa_imagens # Salva o mapa
+        self.imagem_tk = None
         self.janela_selecao_produto = None
         self._callback_selecao = None
         self._is_formatting = False
 
     def _criar_janela_selecao_produto(self, parent):
-        """Função interna para criar a interface da janela de seleção apenas uma vez."""
         top = tk.Toplevel(parent)
         top.title("Consultar e Selecionar Produto")
-        top.geometry("900x600")
+        top.geometry("1100x700")
         top.transient(parent)
+        top.columnconfigure(0, weight=3); top.columnconfigure(1, weight=1)
+        top.rowconfigure(0, weight=1)
 
-        frame_busca = ttk.Frame(top, padding=(10, 10, 10, 0))
-        frame_busca.pack(fill=X)
+        # --- Frame da Esquerda (Lista) ---
+        frame_esquerda = ttk.Frame(top); frame_esquerda.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        frame_esquerda.rowconfigure(1, weight=1); frame_esquerda.columnconfigure(0, weight=1)
+
+        frame_busca = ttk.Frame(frame_esquerda); frame_busca.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         ttk.Label(frame_busca, text="Buscar:").pack(side=LEFT, padx=(0, 5))
+        search_var = tk.StringVar(); entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
+        entry_busca.pack(fill=X, expand=True); entry_busca.focus_set()
+        entry_busca.bind("<KeyRelease>", lambda event: _filtrar_produtos())
 
-        search_var = tk.StringVar()
-        entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
-        entry_busca.pack(fill=X, expand=True)
-        entry_busca.focus_set()
-        search_var.trace_add('write', 
-            lambda *args: self._formatar_para_maiusculo(search_var, entry_busca))
+        frame_tree = ttk.Frame(frame_esquerda); frame_tree.grid(row=1, column=0, sticky="nsew")
+        frame_tree.rowconfigure(0, weight=1); frame_tree.columnconfigure(0, weight=1)
+        colunas = ('ref', 'sku', 'descricao', 'tamanho', 'preco')
+        tree = ttk.Treeview(frame_tree, columns=colunas, show="headings")
+        tree.grid(row=0, column=0, sticky="nsew")
+        tree.heading('ref', text='Referência'); tree.column('ref', width=80); tree.heading('sku', text='SKU'); tree.column('sku', width=80); tree.heading('descricao', text='Descrição'); tree.column('descricao', width=300); tree.heading('tamanho', text='Tamanho'); tree.column('tamanho', width=80, anchor="center"); tree.heading('preco', text='Preço'); tree.column('preco', width=80, anchor="e")
+        scrollbar = ttk.Scrollbar(frame_tree, orient="vertical", command=tree.yview); tree.configure(yscrollcommand=scrollbar.set); scrollbar.grid(row=0, column=1, sticky="ns")
 
-        colunas = ('ref', 'sku', 'descricao', 'tamanho', 'preco', 'quant')
-        tree = ttk.Treeview(top, columns=colunas, show="headings")
-        tree.pack(fill=BOTH, expand=True, padx=10, pady=10)
+        # --- Frame da Direita (Imagem) ---
+        frame_direita = ttk.Frame(top, padding=10)
+        frame_direita.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=10)
+        frame_direita.rowconfigure(0, weight=1); frame_direita.columnconfigure(0, weight=1)
+        lbl_imagem = ttk.Label(frame_direita, text="Selecione um produto", anchor="center", relief="solid")
+        lbl_imagem.grid(row=0, column=0, sticky="nsew")
 
-        tree.heading('ref', text='Referência'); tree.column('ref', width=100)
-        tree.heading('sku', text='SKU'); tree.column('sku', width=100)
-        tree.heading('descricao', text='Descrição'); tree.column('descricao', width=350)
-        tree.heading('tamanho', text='Tamanho'); tree.column('tamanho', width=80, anchor="center")
-        tree.heading('preco', text='Preço'); tree.column('preco', width=100, anchor="e")
-        tree.heading('quant', text='Estoque'); tree.column('quant', width=100, anchor="center")
-
+        # --- Lógica e Botões ---
         produtos_completos = listar_produtos()
-
         def _filtrar_produtos(event=None):
-            termo_busca = search_var.get() #Pega o texto da StringVar
-            tree.delete(*tree.get_children())
-            
+            termo_busca = search_var.get().upper(); tree.delete(*tree.get_children())
             for prod in produtos_completos:
-                if (termo_busca in str(prod.get('pro_sku', '')) or
-                    termo_busca in str(prod.get('pro_descricao', '')) or
-                    termo_busca in str(prod.get('pro_ref', ''))):
-                    
-                    tree.insert('', END, values=(
-                        prod['pro_ref'], prod['pro_sku'], prod['pro_descricao'], 
-                        prod['pro_tam'], f"{prod['pro_valor']:.2f}", prod['pro_quant']
-                    ))
-        
-        entry_busca.bind("<KeyRelease>", _filtrar_produtos)
+                if (termo_busca in str(prod.get('pro_sku', '')).upper() or termo_busca in str(prod.get('pro_descricao', '')).upper() or termo_busca in str(prod.get('pro_ref', '')).upper()):
+                    tree.insert('', END, values=(prod['pro_ref'], prod['pro_sku'], prod['pro_descricao'], prod['pro_tam'], f"{prod.get('pro_valor'):.2f}" if prod.get('pro_valor') is not None else "0.00"))
         _filtrar_produtos()
 
+        # Vincula a seleção da lista à nova função de mostrar imagem
+        tree.bind('<<TreeviewSelect>>', lambda e: self._mostrar_imagem_selecionada_consulta(e, tree, 0, lbl_imagem))
+
+        frame_botoes = ttk.Frame(frame_esquerda); frame_botoes.grid(row=2, column=0, sticky="ew", pady=(10, 0))
         def confirmar_selecao():
-            selecionado = tree.selection()
+            selecionado = tree.selection();
             if not selecionado: return
             sku_selecionado = tree.item(selecionado[0])['values'][1]
-            if self._callback_selecao:
-                self._callback_selecao(sku_selecionado)
-            top.grab_release()
-            top.withdraw()
-
-        def cancelar_selecao():
-            top.grab_release()
-            top.withdraw()
-
-        frame_botoes = ttk.Frame(top)
-        frame_botoes.pack(fill=X, padx=10, pady=5)
-        btn_selecionar = ttk.Button(frame_botoes, text="Selecionar", command=confirmar_selecao, bootstyle=PRIMARY)
-        btn_selecionar.pack(side=RIGHT, padx=5)
+            if self._callback_selecao: self._callback_selecao(sku_selecionado)
+            top.grab_release(); top.withdraw()
+        btn_selecionar = ttk.Button(frame_botoes, text="Selecionar", command=confirmar_selecao, bootstyle=PRIMARY); btn_selecionar.pack(side=RIGHT, padx=5)
+        def cancelar_selecao(): top.grab_release(); top.withdraw()
         ttk.Button(frame_botoes, text="Cancelar", command=cancelar_selecao, bootstyle=(SECONDARY, OUTLINE)).pack(side=RIGHT)
         tree.bind("<Double-1>", lambda event: btn_selecionar.invoke())
         top.protocol("WM_DELETE_WINDOW", cancelar_selecao)
@@ -114,16 +107,22 @@ class Consultas:
         janela_usuarios.title("Visualizar Funcionários")
 
         colunas = ("ID", "Cargo", "Nome", "CPF")
-        tree = ttk.Treeview(janela_usuarios, columns=colunas, show="headings")
+        colunas_visiveis = ("Cargo", "Nome", "CPF")
 
-        for col in colunas:
+        # Esconder a coluna 'ID'
+        tree = ttk.Treeview(janela_usuarios, columns=colunas, show="headings", displaycolumns=colunas_visiveis)
+
+        for col in colunas_visiveis:
             tree.heading(col, text=col)
-            tree.column(col, anchor="center")
+            if col == "Nome":
+                tree.column(col, anchor="w", width=250) # Alinha o nome à esquerda
+            else:
+                tree.column(col, anchor="center", width=120)
 
         for linha in dados:
             tree.insert("", "end", values=linha)
 
-        tree.pack(fill="both", expand=True)
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
 
     def visualizar_clientes(self):
         janela_clientes = ttkb.Toplevel(self.master)
@@ -205,56 +204,54 @@ class Consultas:
         janela_produtos = ttkb.Toplevel(self.master)
         janela_produtos.title("Visualizar Produtos")
         janela_produtos.state('zoomed')
+        janela_produtos.columnconfigure(0, weight=3); janela_produtos.columnconfigure(1, weight=1)
+        janela_produtos.rowconfigure(0, weight=1)
 
-        frame_busca = ttk.Frame(janela_produtos, padding=(10, 10, 10, 0))
-        frame_busca.pack(fill=X)
+        # --- Frame da Esquerda (Lista) ---
+        frame_esquerda = ttk.Frame(janela_produtos)
+        frame_esquerda.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        frame_esquerda.rowconfigure(1, weight=1); frame_esquerda.columnconfigure(0, weight=1)
+        
+        frame_busca = ttk.Frame(frame_esquerda, padding=(0, 0, 0, 10)); frame_busca.grid(row=0, column=0, sticky="ew")
         ttk.Label(frame_busca, text="Buscar:").pack(side=LEFT, padx=(0, 5))
+        search_var = tk.StringVar(); entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
+        entry_busca.pack(fill=X, expand=True); entry_busca.focus_set()
+        entry_busca.bind("<KeyRelease>", lambda e: _filtrar_visualizacao())
+
+        frame_tree = ttk.Frame(frame_esquerda); frame_tree.grid(row=1, column=0, sticky="nsew")
+        frame_tree.rowconfigure(0, weight=1); frame_tree.columnconfigure(0, weight=1)
         
-        search_var = tk.StringVar()
-        entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
-        entry_busca.pack(fill=X, expand=True)
-        entry_busca.focus_set()
-        search_var.trace_add('write',
-            lambda *args: self._formatar_para_maiusculo(search_var, entry_busca))
+        colunas = ("ID", "Ref", "SKU", "Descrição", "Tamanho", "Valor")
+        colunas_visiveis = ("Ref", "SKU", "Descrição", "Tamanho", "Valor")
 
-        frame_tree = ttk.Frame(janela_produtos)
-        frame_tree.pack(fill="both", expand=True, padx=10, pady=10)
+        # Esconder a coluna 'ID'
+        tree = ttk.Treeview(frame_tree, columns=colunas, show="headings", displaycolumns=colunas_visiveis)
+        tree.grid(row=0, column=0, sticky="nsew")
 
-        colunas = ("ID", "Ref", "SKU", "Descrição", "Tamanho", "Quantidade", "Valor")
-        tree = ttk.Treeview(frame_tree, columns=colunas, show="headings")
-
-        for col in colunas:
+        for col in colunas_visiveis:
             tree.heading(col, text=col)
-            if col == "Descrição":
-                tree.column(col, anchor="w", width=300)
-            else:
-                tree.column(col, anchor="center", width=100)
+            if col == "Descrição": tree.column(col, anchor="w", width=300)
+            else: tree.column(col, anchor="center", width=80)
+            
+        scrollbar = ttk.Scrollbar(frame_tree, orient="vertical", command=tree.yview); tree.configure(yscrollcommand=scrollbar.set); scrollbar.grid(row=0, column=1, sticky="ns")
 
-        tree.pack(side=LEFT, fill="both", expand=True)
-        scrollbar = ttk.Scrollbar(frame_tree, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=RIGHT, fill="y")
-        
+        # --- Frame da Direita (Imagem) ---
+        frame_direita = ttk.Frame(janela_produtos, padding=10)
+        frame_direita.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=10)
+        frame_direita.rowconfigure(0, weight=1); frame_direita.columnconfigure(0, weight=1)
+        lbl_imagem = ttk.Label(frame_direita, text="Selecione um produto", anchor="center", relief="solid")
+        lbl_imagem.grid(row=0, column=0, sticky="nsew")
+
         produtos_completos = listar_produtos()
-
         def _filtrar_visualizacao(event=None):
-            termo_busca = search_var.get() # Pega o texto da StringVar
-            tree.delete(*tree.get_children())
-
+            termo_busca = search_var.get().upper(); tree.delete(*tree.get_children())
             for prod in produtos_completos:
-                if (termo_busca in str(prod.get('pro_ref', '')) or
-                    termo_busca in str(prod.get('pro_sku', '')) or
-                    termo_busca in str(prod.get('pro_descricao', ''))):
-                    
-                    valores = (
-                        prod['pro_id'], prod['pro_ref'], prod['pro_sku'], 
-                        prod['pro_descricao'], prod['pro_tam'], 
-                        prod['pro_quant'], prod['pro_valor']
-                    )
+                if (termo_busca in str(prod.get('pro_ref', '')).upper() or termo_busca in str(prod.get('pro_sku', '')).upper() or termo_busca in str(prod.get('pro_descricao', '')).upper() or termo_busca in str(prod.get('pro_bipe', '')).upper()):
+                    valores = (prod['pro_id'], prod.get('pro_ref', ''), prod.get('pro_sku', ''), prod.get('pro_descricao', ''), prod.get('pro_tam', ''), prod.get('pro_valor')); 
                     tree.insert("", "end", values=valores)
-        
-        entry_busca.bind("<KeyRelease>", _filtrar_visualizacao)
         _filtrar_visualizacao()
+        
+        tree.bind('<<TreeviewSelect>>', lambda e: self._mostrar_imagem_selecionada_consulta(e, tree, 1, lbl_imagem))
 
     def visualizar_pedidos(self):
         conexao = conectar()
@@ -420,6 +417,32 @@ class Consultas:
 
         self._is_formatting = False
 
+    def _mostrar_imagem_selecionada_consulta(self, event, treeview, ref_column_index, image_label):
+        selecao = treeview.selection()
+        if not selecao: return
+
+        item_iid = selecao[0]
+        try:
+            # Pega a referência da coluna correta
+            ref_produto = treeview.item(item_iid, "values")[ref_column_index]
+        except IndexError:
+            return
+
+        caminho_relativo = self.mapa_imagens.get(ref_produto)
+        if caminho_relativo:
+            try:
+                # O caminho parte da pasta 'codigos'
+                script_dir = os.path.dirname(__file__)
+                caminho_absoluto = os.path.join(script_dir, caminho_relativo)
+
+                img_pil = Image.open(caminho_absoluto)
+                img_pil.thumbnail((250, 250)) # Define um tamanho máximo para a imagem
+                self.imagem_tk = ImageTk.PhotoImage(img_pil)
+                image_label.config(image=self.imagem_tk, text="")
+            except Exception:
+                image_label.config(image='', text="Erro ao carregar\nimagem.")
+        else:
+            image_label.config(image='', text="Produto sem imagem\ncadastrada.")
 
 # Execução de testes
 # if __name__ == "__main__":

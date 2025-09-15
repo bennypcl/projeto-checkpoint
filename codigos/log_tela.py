@@ -7,7 +7,7 @@ from PIL import Image, ImageTk
 from conexao import conectar
 import crud
 import os
-
+import shutil
 from temas import GerenciadorTema
 from tela_ponto_venda import TelaPontoVenda
 from relatorio_pdf import gerar_relatorio_pdf
@@ -59,13 +59,14 @@ class Tela:
         self.novo_item_contador = 0
         self.gerenciador_tema = GerenciadorTema(self.janela)
         self.tela_relatorio_vendas = TelaRelatorioVendas(self.janela)
-        self.tela_consulta = Consultas(self.janela)
+        self.tela_consulta = Consultas(self.janela, self.mapa_imagens)
         self.tela_venda = TelaPontoVenda(self.janela, self.vendas_realizadas, self.tela_consulta)
         self.relatorio = gerar_relatorio_pdf
 
         self.inventario_iniciado = False
         self.inventario_modificado = False
         self.id_inventario_ativo = None
+        self.sku_contagem_var = tk.StringVar()
 
     def carregar_mapa_de_imagens(self):
         self.mapa_imagens.clear()
@@ -85,22 +86,16 @@ class Tela:
                 cursor.close()
                 conn.close()
 
-    def _formatar_para_maiusculo(self, string_var, entry_widget):
-        # Se a função já estiver em execução, não faz nada (evita loop infinito)
+    def _formatar_para_maiusculo(self, string_var, *args):
+        # O *args permite que a função receba argumentos extras (como o 'event' ou o 'entry_widget') e simplesmente os ignore.
         if self._is_formatting:
             return
+        self._is_formatting = True
 
-        self._is_formatting = True  # Avisa que a formatação começou
-        
-        texto = string_var.get()
-        texto_maiusculo = texto.upper()
-        string_var.set(texto_maiusculo)
-        
-        # Move o cursor para o final, verificando se o widget ainda existe
-        if entry_widget.winfo_exists():
-            entry_widget.after(1, lambda: entry_widget.icursor(len(texto_maiusculo)))
+        texto_atual = string_var.get()
+        string_var.set(texto_atual.upper())
 
-        self._is_formatting = False # Avisa que a formatação terminou
+        self._is_formatting = False
 
     def autentica(self, event=None):
         # Lendo os valores das StringVars
@@ -164,8 +159,12 @@ class Tela:
         self.btn_ad_contagem = ttk.Button(frm_controle, text='Conta Est. por SKU', command=self.contar_sku); self.btn_ad_contagem.pack(side=RIGHT, padx=5)
         self.modificador_var = tk.IntVar(value=1)
         self.spn_modificador = ttk.Spinbox(frm_controle, from_=1, to=10, textvariable=self.modificador_var, width=2); self.spn_modificador.pack(side=RIGHT, padx=2.5)
-        self.ent_ad_contagem = ttk.Entry(frm_controle); self.ent_ad_contagem.pack(side=RIGHT, padx=2.5)
+
+        self.ent_ad_contagem = ttk.Entry(frm_controle, textvariable=self.sku_contagem_var)
+        self.ent_ad_contagem.pack(side=RIGHT, padx=2.5)
         self.ent_ad_contagem.bind('<Return>', self.contar_sku)
+        self.sku_contagem_var.trace_add('write',
+            lambda *args: self._formatar_para_maiusculo(self.sku_contagem_var, self.ent_ad_contagem))
 
         
         frm_treeview = ttk.Frame(frm_controles_e_lista); frm_treeview.grid(row=1, column=0, sticky="nsew", pady=10); frm_treeview.rowconfigure(0, weight=1); frm_treeview.columnconfigure(0, weight=1)
@@ -245,32 +244,34 @@ class Tela:
         self.tela_relatorio(dados_para_relatorio) # Chama a função que constrói a tela
 
     def mostrar_imagem_selecionada(self, event=None):
-        selecao = self.tvw_inventario.selection()
-        if not selecao:
-            self.lbl_imagem_produto.config(image='', text="Selecione um produto")
-            return
+        selecionado = self.tvw_inventario.selection()
+        if not selecionado: return
 
-        item_iid = selecao[0]
+        item_iid = selecionado[0]
         try:
             ref_produto = self.tvw_inventario.item(item_iid, "values")[0]
         except IndexError:
             return
 
         caminho_relativo = self.mapa_imagens.get(ref_produto)
+        
         if caminho_relativo:
             try:
                 script_dir = os.path.dirname(__file__)
                 caminho_absoluto = os.path.join(script_dir, caminho_relativo)
-                img_pil = Image.open(caminho_absoluto)
-                largura_painel = self.frm_imagem_display.winfo_width()
-                altura_painel = self.frm_imagem_display.winfo_height()
-                if largura_painel <= 1 or altura_painel <= 1:
-                    largura_painel, altura_painel = 250, 250
-                img_pil.thumbnail((largura_painel, altura_painel))
-                self.imagem_tk = ImageTk.PhotoImage(img_pil)
+                
+                imagem_pil = Image.open(caminho_absoluto)
+                imagem_pil.thumbnail((250, 250))
+                
+                self.imagem_tk = ImageTk.PhotoImage(imagem_pil)                
                 self.lbl_imagem_produto.config(image=self.imagem_tk, text="")
+                self.lbl_imagem_produto.image = self.imagem_tk
+
+            except FileNotFoundError:
+                self.lbl_imagem_produto.config(image='', text="Imagem não encontrada.")
             except Exception as e:
-                self.lbl_imagem_produto.config(image='', text=f"Erro ao carregar\nimagem: {e}")
+                print(f"Erro ao processar imagem: {e}")
+                self.lbl_imagem_produto.config(image='', text="Erro ao carregar\nimagem.")
         else:
             self.lbl_imagem_produto.config(image='', text="Produto sem imagem\ncadastrada no banco.")
 
@@ -389,16 +390,19 @@ class Tela:
                     linha = linha.strip()
                     if not linha: continue
                     campos = [campo.strip() for campo in linha.split(';')]
-                    if len(campos) == 6:
-                        ref, sku, desc, tam, quant_str, valor_str = campos
-                        try:
-                            quant = int(quant_str)
-                            valor = float(valor_str.replace(',', '.'))
-                            iid = f"file_{i}"
-                            self.dados_originais.append([iid, ref, sku, desc, tam, quant, valor, ""])
-                        except ValueError:
-                            print(f"AVISO: Linha {i+1} ignorada - valor/quantidade inválido: {linha}")
-                            continue
+                    try:
+                        # Pega apenas as 6 primeiras colunas, ignorando qualquer coluna extra no final
+                        ref, sku, desc, tam, quant_str, valor_str = campos[:6]
+
+                        quant = int(quant_str)
+                        valor = float(valor_str.replace(',', '.')) if valor_str.strip() else 0.0
+
+                        iid = f"file_{i}"
+                        self.dados_originais.append([iid, ref, sku, desc, tam, quant, valor, ""])
+
+                    except (ValueError, IndexError):
+                        print(f"AVISO: Linha {i+1} ignorada - formato inválido: {linha}")
+                        continue
 
             #CRIA O INVENTÁRIO NO BANCO
             self.id_inventario_ativo = crud.criar_novo_inventario(self.dados_originais)
@@ -422,135 +426,166 @@ class Tela:
             messagebox.showerror("Erro de Leitura", f"Não foi possível ler o arquivo:\n{e}")
 
     def adicionar_produto(self):
-
         top = Toplevel(self.janela)
-        top.title("Adicionar Novo Produto ao Inventário")
-        top.geometry("400x480")
+        top.title("Adicionar Produto")
+        top.geometry("450x550")
         top.resizable(False, False)
-        top.transient(self.janela)
         top.grab_set()
 
         # --- Variáveis de controle ---
-        sku_var = StringVar()
-        ref_var = StringVar()
-        desc_var = StringVar()
-        tam_var = StringVar()
-        cor_var = StringVar()
-        preco_var = StringVar()
-        quant_var = StringVar()
+        sku_var, ref_var, desc_var, tam_var, preco_var, bipe_var = StringVar(), StringVar(), StringVar(), StringVar(), StringVar(), StringVar()
+        caminho_imagem_var = StringVar(value="Nenhuma imagem selecionada.")
+        imagem_selecionada = {'path': None} # Dicionário para guardar o caminho da imagem original
 
+        # --- Função para o botão de selecionar imagem ---
+        def _selecionar_imagem():
+            caminho = filedialog.askopenfilename(
+                title="Selecione a imagem do produto",
+                filetypes=[("Arquivos de Imagem", "*.png *.jpg *.jpeg *.gif *.bmp")]
+            )
+            if caminho:
+                imagem_selecionada['path'] = caminho
+                nome_arquivo = os.path.basename(caminho)
+                caminho_imagem_var.set(nome_arquivo)
+
+        # --- Lógica de busca e adição ---
         def _buscar_sku():
-            sku = sku_var.get().strip()
-            if not sku:
-                messagebox.showwarning("SKU Inválido", "Por favor, digite um SKU.", parent=top)
+            if not self.inventario_iniciado:
+                messagebox.showerror("Ação Inválida", "Você só pode adicionar um produto já existente a um inventário ativo.\n\nPara cadastrar um produto novo, use o cadastro manual.", parent=top)
                 return
+            sku_ou_bipe = sku_var.get().strip()
 
-            from crud import listar_produto_especifico
-            produto_encontrado = listar_produto_especifico(sku)
+            if not sku_ou_bipe:
+                messagebox.showwarning("Código Inválido", "Por favor, digite um SKU ou Bipe.", parent=top)
+                return
+            produto_encontrado = crud.buscar_produto_por_sku_ou_bipe(sku_ou_bipe)
 
             if produto_encontrado:
-                messagebox.showinfo("Sucesso", f"'{produto_encontrado['pro_descricao']}' adicionado.", parent=top)
-                
                 self.novo_item_contador += 1
                 iid = f"new_{self.novo_item_contador}"
-
-                self.dados_originais.append([
-                    iid,
-                    produto_encontrado.get('pro_ref', ''),
-                    produto_encontrado.get('pro_sku', sku),
-                    produto_encontrado.get('pro_descricao', ''),
-                    produto_encontrado.get('pro_tam', ''),
-                    produto_encontrado.get('pro_quant', 0),
-                    produto_encontrado.get('pro_valor', 0.0),
-                    ""
-                ])
+                self.dados_originais.append([ iid, produto_encontrado.get('pro_ref', ''), produto_encontrado.get('pro_sku', sku_ou_bipe), produto_encontrado.get('pro_descricao', ''), produto_encontrado.get('pro_tam', ''), 0, produto_encontrado.get('pro_valor', 0.0), "" ])
+                sku_real = produto_encontrado['pro_sku']
+                crud.adicionar_item_ao_inventario(self.id_inventario_ativo, sku_real)
                 self.filtrar_treeview(None)
+                
+                messagebox.showinfo("Sucesso", f"'{produto_encontrado['pro_descricao']}' adicionado ao inventário.", parent=top)
                 top.destroy()
             else:
-                messagebox.showinfo("Produto Não Encontrado", "SKU não existe. Preencha os dados manualmente.", parent=top)
+                messagebox.showinfo("Produto Não Encontrado", "Código não existe. Preencha os dados manualmente para cadastrar um novo produto.", parent=top)
                 manual_frame.pack(fill='x', expand=True, padx=10, pady=10)
                 entry_sku.config(state='disabled')
                 btn_buscar.config(state='disabled')
         
         def _adicionar_manualmente():
-            """
-            Coleta os dados, insere no DB usando SUA função, e atualiza o Treeview.
-            """
             try:
-                # Coleta os dados dos campos
+                #Coleta todos os dados da interface
                 ref = ref_var.get().strip()
                 sku = sku_var.get().strip()
                 desc = desc_var.get().strip()
                 tam = tam_var.get().strip()
-                cor = cor_var.get().strip()
-                preco = float(preco_var.get().replace(',', '.'))
-                quant = int(quant_var.get())
+                bipe = bipe_var.get().strip()
+                preco = preco_var.get().strip()
 
-                if not all([ref, sku, desc]):
-                    messagebox.showerror("Campos Vazios", "Referência, SKU e Descrição são obrigatórios.", parent=top)
+                if not all([ref, sku, desc, tam, bipe, preco]):
+                    messagebox.showerror("Campos Obrigatórios", "Todos os campos devem ser preenchidos para cadastrar um novo produto.", parent=top)
                     return
 
-                from crud import inserir_produto
-                sucesso_db = inserir_produto(ref, sku, desc, tam, cor, quant, preco)
+                caminho_imagem_db = None #Inicia o caminho da imagem como nulo
+
+                # Bloco de Manipulação da Imagem
+                if imagem_selecionada['path']:
+                    caminho_origem = imagem_selecionada['path']
+                    _, extensao = os.path.splitext(caminho_origem)
+                    novo_nome_arquivo = f"{ref}{extensao}"
+
+                    caminho_relativo_db = os.path.join("imagens_produtos", novo_nome_arquivo)
+
+                    script_dir = os.path.dirname(__file__)
+                    caminho_destino_abs = os.path.join(script_dir, caminho_relativo_db)
+
+                    os.makedirs(os.path.dirname(caminho_destino_abs), exist_ok=True)
+                    shutil.copy(caminho_origem, caminho_destino_abs) # Tenta copiar o arquivo
+
+                    # Se a cópia deu certo, define a variável para salvar no banco
+                    caminho_imagem_db = caminho_relativo_db
+
+                # Bloco de Inserção no Banco
+                sucesso_db = crud.inserir_produto(ref, sku, desc, tam, bipe, preco, caminho_imagem_db)
 
                 if sucesso_db:
-                    self.novo_item_contador += 1
-                    iid = f"new_{self.novo_item_contador}"
-                    
-                    self.dados_originais.append([iid, ref, sku, desc, tam, quant, preco, ""])
-                    self.filtrar_treeview(None)
-                    
-                    messagebox.showinfo("Sucesso", f"{desc} adicionado.", parent=top)
+                    # Se salvou no banco, atualiza o resto da aplicação
+                    if caminho_imagem_db:
+                        self.mapa_imagens[ref] = caminho_imagem_db
+
+                    msg_sucesso = f"'{desc}' cadastrado com sucesso no banco de dados."
+
+                    if self.inventario_iniciado:
+                        self.novo_item_contador += 1
+                        iid = f"new_{self.novo_item_contador}"
+                        preco_float = float(preco.replace(',', '.')) if preco else 0.0
+                        self.dados_originais.append([iid, ref, sku, desc, tam, 0, preco_float, ""])
+                        crud.adicionar_item_ao_inventario(self.id_inventario_ativo, sku)
+                        self.filtrar_treeview(None)
+                        msg_sucesso += "\nE adicionado ao inventário atual."
+
+                    messagebox.showinfo("Sucesso", msg_sucesso, parent=top)
                     top.destroy()
 
-            except ValueError:
-                messagebox.showerror("Erro de Valor", "Verifique se 'Preço' e 'Quantidade' são números válidos.", parent=top)
             except Exception as e:
-                messagebox.showerror("Erro Inesperado", f"Ocorreu um erro: {e}", parent=top)
+                messagebox.showerror("Erro Inesperado", f"Ocorreu um erro ao salvar o produto: {e}", parent=top)
 
         # --- Montagem da Interface ---
         busca_frame = ttk.Frame(top, padding=10)
         busca_frame.pack(fill='x', padx=10, pady=10)
-        ttk.Label(busca_frame, text="Digite o SKU do produto:").pack(fill='x')
+        
+        ttk.Label(busca_frame, text="Digite o SKU ou Bipe para adicionar produto existente:").pack(fill='x')
         entry_sku = ttk.Entry(busca_frame, textvariable=sku_var)
-        entry_sku.pack(fill='x', pady=5)
-        entry_sku.focus_set()
-        sku_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(sku_var, entry_sku))
-        btn_buscar = ttk.Button(busca_frame, text="Buscar", command=_buscar_sku)
+        entry_sku.pack(fill='x', pady=5); entry_sku.focus_set()
+        entry_sku.bind("<KeyRelease>", lambda event: self._formatar_para_maiusculo(sku_var))
+        
+        btn_buscar = ttk.Button(busca_frame, text="Buscar e Adicionar ao Inventário", command=_buscar_sku)
         btn_buscar.pack(pady=5)
         
-        manual_frame = ttk.LabelFrame(top, text="Cadastro Manual")
+        manual_frame = ttk.LabelFrame(top, text="Cadastrar Novo Produto")
+        manual_frame.columnconfigure(1, weight=1)
         
         ttk.Label(manual_frame, text="Referência:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
-        entry_ref = ttk.Entry(manual_frame, textvariable=ref_var)
-        entry_ref.grid(row=0, column=1, sticky='ew', padx=5, pady=2)
-        ref_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(ref_var, entry_ref))
+        entry_ref = ttk.Entry(manual_frame, textvariable=ref_var); entry_ref.grid(row=0, column=1, sticky='ew', padx=5, pady=2)
+        entry_ref.bind("<KeyRelease>", lambda event: self._formatar_para_maiusculo(ref_var))
 
-        ttk.Label(manual_frame, text="Descrição:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
-        entry_desc = ttk.Entry(manual_frame, textvariable=desc_var)
-        entry_desc.grid(row=1, column=1, sticky='ew', padx=5, pady=2)
-        desc_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(desc_var, entry_desc))
+        ttk.Label(manual_frame, text="SKU:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        ttk.Entry(manual_frame, textvariable=sku_var).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
         
-        ttk.Label(manual_frame, text="Tamanho:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
-        entry_tam = ttk.Entry(manual_frame, textvariable=tam_var)
-        entry_tam.grid(row=2, column=1, sticky='ew', padx=5, pady=2)
-        tam_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(tam_var, entry_tam))
+        ttk.Label(manual_frame, text="Descrição:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
+        entry_desc = ttk.Entry(manual_frame, textvariable=desc_var); entry_desc.grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        entry_desc.bind("<KeyRelease>", lambda event: self._formatar_para_maiusculo(desc_var))
 
-        ttk.Label(manual_frame, text="Cor:").grid(row=3, column=0, sticky='w', padx=5, pady=2)
-        entry_cor = ttk.Entry(manual_frame, textvariable=cor_var)
-        entry_cor.grid(row=3, column=1, sticky='ew', padx=5, pady=2)
-        cor_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(cor_var, entry_cor))
-
-        ttk.Label(manual_frame, text="Quantidade (Estoque):").grid(row=4, column=0, sticky='w', padx=5, pady=2)
-        ttk.Entry(manual_frame, textvariable=quant_var).grid(row=4, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Label(manual_frame, text="Tamanho:").grid(row=3, column=0, sticky='w', padx=5, pady=2)
+        entry_tam = ttk.Entry(manual_frame, textvariable=tam_var); entry_tam.grid(row=3, column=1, sticky='ew', padx=5, pady=2)
+        entry_tam.bind("<KeyRelease>", lambda event: self._formatar_para_maiusculo(tam_var))
+        
+        ttk.Label(manual_frame, text="Bipe (Cód. Barras):").grid(row=4, column=0, sticky='w', padx=5, pady=2)
+        entry_bipe = ttk.Entry(manual_frame, textvariable=bipe_var); entry_bipe.grid(row=4, column=1, sticky='ew', padx=5, pady=2)
+        entry_bipe.bind("<KeyRelease>", lambda event: self._formatar_para_maiusculo(bipe_var))
         
         ttk.Label(manual_frame, text="Preço (R$):").grid(row=5, column=0, sticky='w', padx=5, pady=2)
         ttk.Entry(manual_frame, textvariable=preco_var).grid(row=5, column=1, sticky='ew', padx=5, pady=2)
-        
-        manual_frame.columnconfigure(1, weight=1)
 
-        btn_adicionar = ttk.Button(manual_frame, text="Adicionar ao Inventário", command=_adicionar_manualmente)
-        btn_adicionar.grid(row=6, column=0, columnspan=2, pady=10)
+        # --- BLOCO PARA IMAGEM ---
+        ttk.Label(manual_frame, text="Imagem:").grid(row=6, column=0, sticky='w', padx=5, pady=5)
+        frame_imagem = ttk.Frame(manual_frame)
+        frame_imagem.grid(row=6, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Button(frame_imagem, text="Selecionar Imagem...", command=_selecionar_imagem).pack(side=LEFT)
+        ttk.Label(frame_imagem, textvariable=caminho_imagem_var, wraplength=200).pack(side=LEFT, padx=5)
+
+        btn_adicionar = ttk.Button(manual_frame, text="Salvar Novo Produto", command=_adicionar_manualmente)
+        btn_adicionar.grid(row=7, column=0, columnspan=2, pady=10)
+
+        if not self.inventario_iniciado:
+            manual_frame.pack(fill='x', expand=True, padx=10, pady=10)
+            btn_buscar.config(state='disabled')
+            entry_sku.config(state='disabled')
+            top.title("Cadastrar Novo Produto")
 
     def filtrar_treeview(self, criterio_tupla=None):
         self.tvw_inventario.delete(*self.tvw_inventario.get_children())
@@ -603,7 +638,8 @@ class Tela:
                     else:
                         tags_aplicar.append("igual")
 
-                valores_display = (ref, sku, desc, tam, f"{valor:.2f}", quant, est_real)
+                valor_formatado = f"{valor:.2f}" if valor is not None else "" # Formata apenas se o valor não for nulo
+                valores_display = (ref, sku, desc, tam, valor_formatado, quant, est_real)
                 self.tvw_inventario.insert("", "end", iid=iid, values=valores_display, tags=tuple(tags_aplicar))
 
     def editar_celula(self, event):
@@ -630,54 +666,50 @@ class Tela:
             messagebox.showerror("Erro", f"Ocorreu um erro na edição: {e}")
 
     def contar_sku(self, event=None):
-        # Pega o SKU do campo de entrada, remove espaços e o converte para maiúsculo
-        sku_a_contar = self.ent_ad_contagem.get().strip().upper()
+        codigo_digitado = self.sku_contagem_var.get().strip()
+        if not codigo_digitado:
+            return
 
-        if not sku_a_contar:
-            return  # Não faz nada se o campo estiver vazio
+        produto_db = crud.buscar_produto_por_sku_ou_bipe(codigo_digitado)
 
-        produto_encontrado = False
-        # Itera sobre a lista de dados para encontrar o produto
+        if not produto_db:
+            messagebox.showwarning("Não encontrado", f"Produto com código '{codigo_digitado}' não localizado.")
+            self.ent_ad_contagem.delete(0, "end")
+            return
+
+        # Pega o SKU "oficial" do produto encontrado no banco
+        sku_a_contar = produto_db['pro_sku']
+
+        produto_encontrado_na_lista = False
+        iid_do_item = None
+        # Procura o SKU na lista do inventário carregado
         for i, item_data in enumerate(self.dados_originais):
-            # posição SKU
             if item_data[2] == sku_a_contar:
-                
-                # posição conta estoque
                 est_real_atual = item_data[7]
-
                 valor_a_somar = self.modificador_var.get()
-                
-                # Tenta converter para inteiro e somar 1. Se falhar, começa com 1.
+
                 try:
                     nova_quantidade = int(est_real_atual) + valor_a_somar
                 except (ValueError, TypeError):
                     nova_quantidade = valor_a_somar
-                
-                # Atualiza a quantidade na sua lista de dados principal
+
                 self.dados_originais[i][7] = nova_quantidade
                 self.inventario_modificado = True
-                crud.atualizar_contagem_item(self.id_inventario_ativo, sku_a_contar, nova_quantidade) #Atualiza em tempo real
-                
-                produto_encontrado = True
-                iid_do_item = item_data[0] # Pega o iid do item para poder selecioná-lo
-                break # Para o loop assim que encontrar o produto
+                crud.atualizar_contagem_item(self.id_inventario_ativo, sku_a_contar, nova_quantidade)
 
-        # Se o produto foi encontrado...
-        if produto_encontrado:
-            # 5. Recarrega a Treeview para mostrar a atualização e aplicar as cores
+                produto_encontrado_na_lista = True
+                iid_do_item = item_data[0]
+                break
+
+        if produto_encontrado_na_lista:
             self.filtrar_treeview(None)
-            
-            # Limpa o campo de entrada para a próxima contagem
             self.ent_ad_contagem.delete(0, "end")
-            
-            # Opcional: Seleciona e foca no item que foi atualizado na tabela
             if iid_do_item in self.tvw_inventario.get_children():
                 self.tvw_inventario.selection_set(iid_do_item)
                 self.tvw_inventario.see(iid_do_item)
-
-        # Se não encontrou...
         else:
-            messagebox.showwarning("SKU não encontrado", f"O SKU '{sku_a_contar}' não foi localizado no inventário carregado.")
+            # Este caso é raro, mas pode acontecer se o produto existe no DB mas não no arquivo .txt
+            messagebox.showwarning("Não encontrado", f"O produto '{sku_a_contar}' existe, mas não faz parte deste inventário.")
             self.ent_ad_contagem.delete(0, "end")
 
     def finalizar_inventario(self):
@@ -701,15 +733,15 @@ class Tela:
 
     def _atualizar_estado_botoes_inventario(self):
         if self.inventario_iniciado:
-            # Se um inventário está ativo
+            # Se um inventário está ATIVO, desabilita o Carregar e habilita os outros
             self.btn_ad_arquivo.config(state="disabled")
             self.btn_finalizar_inventario.config(state="normal")
-            self.btn_cancelar_inventario.config(state="normal") #HABILITA O CANCELAR
+            self.btn_cancelar_inventario.config(state="normal")
         else:
-            # Se não há inventário
+            # Se NÃO HÁ inventário, habilita o Carregar e desabilita os outros
             self.btn_ad_arquivo.config(state="normal")
             self.btn_finalizar_inventario.config(state="disabled")
-            self.btn_cancelar_inventario.config(state="disabled") #DESABILITA O CANCELAR
+            self.btn_cancelar_inventario.config(state="disabled")
 
     def cancelar_inventario(self):
         if not self.inventario_iniciado:
@@ -762,78 +794,94 @@ class Tela:
             self.filtrar_treeview(None)
             self._atualizar_estado_botoes_inventario()
 
-    # Dentro do arquivo: log_tela.py
-
     def abrir_tela_lista_inventarios(self):
         top = Toplevel(self.janela)
         top.title("Histórico de Inventários Finalizados")
-        top.state('zoomed') # Tela já maximizada
+        top.state('zoomed')
+        #top.transient(self.janela)
+        top.grab_set()
 
-        # --- Frame de Filtros por Data ---
+        # --- 1. CRIAÇÃO DOS FRAMES PRINCIPAIS (sem .pack() ainda) ---
         frame_filtros = ttk.LabelFrame(top, text="Filtrar por Data de Finalização", padding=10)
-        frame_filtros.pack(fill=X, padx=10, pady=10)
-        
+        frame_lista = ttk.Frame(top)
+        frame_acoes = ttk.Frame(top, padding=(10, 10, 10, 10))
+
+        # --- 2. MONTAGEM DO CONTEÚDO DE CADA FRAME ---
+
+        # --- Conteúdo do Frame de Filtros (Topo) ---
         ttk.Label(frame_filtros, text="De:").pack(side=LEFT, padx=(0, 5))
         date_inicio = ttk.DateEntry(frame_filtros, bootstyle=PRIMARY, dateformat="%d/%m/%Y")
         date_inicio.pack(side=LEFT, padx=(0, 10))
-        
         ttk.Label(frame_filtros, text="Até:").pack(side=LEFT, padx=(0, 5))
         date_fim = ttk.DateEntry(frame_filtros, bootstyle=PRIMARY, dateformat="%d/%m/%Y")
         date_fim.pack(side=LEFT, padx=(0, 20))
 
         def _buscar_e_popular():
-            for item in tree.get_children():
-                tree.delete(item)
-            
+            for item in tree.get_children(): tree.delete(item)
             from datetime import datetime
-            data_inicio_br = date_inicio.entry.get()
-            data_fim_br = date_fim.entry.get()
+            data_inicio_br = date_inicio.entry.get(); data_fim_br = date_fim.entry.get()
             data_i = datetime.strptime(data_inicio_br, "%d/%m/%Y").strftime("%Y-%m-%d")
             data_f = datetime.strptime(data_fim_br, "%d/%m/%Y").strftime("%Y-%m-%d")
-            
             lista_inventarios = crud.listar_inventarios_finalizados(data_i, data_f)
             for inv in lista_inventarios:
                 data_inicio_fmt = inv['inv_data_inicio'].strftime('%d/%m/%Y %H:%M')
                 data_fim_fmt = inv['inv_data_finalizacao'].strftime('%d/%m/%Y %H:%M') if inv.get('inv_data_finalizacao') else "N/A"
-                
-                # REQUISTO 2: Criamos um nome descritivo para cada inventário
                 nome_inventario = f"Inventário - {data_fim_fmt}"
-                
-                # REQUISITO 1: O ID não vai para a tela, mas é usado como identificador interno do item (iid)
                 tree.insert("", END, iid=inv['inv_id'], values=(nome_inventario, data_inicio_fmt, data_fim_fmt))
-
+        
         btn_buscar = ttk.Button(frame_filtros, text="Buscar", command=_buscar_e_popular, bootstyle=PRIMARY)
         btn_buscar.pack(side=LEFT)
 
-        # --- Treeview para listar os inventários ---
-        frame_lista = ttk.Frame(top, padding=(10,0,10,10))
-        frame_lista.pack(fill=BOTH, expand=True)
-
-        # REQUISITO 3: Mudamos as colunas para um estilo de "arquivo"
+        # --- Conteúdo do Frame da Lista (Meio) ---
         colunas = ("nome", "inicio", "fim")
-        tree = ttk.Treeview(frame_lista, columns=colunas, show="headings")
+        tree = ttk.Treeview(frame_lista, columns=colunas, show="headings", selectmode="extended")
         tree.heading("nome", text="Nome"); tree.column("nome", width=300)
         tree.heading("inicio", text="Data de Início"); tree.column("inicio", width=200, anchor=CENTER)
         tree.heading("fim", text="Data de Finalização"); tree.column("fim", width=200, anchor=CENTER)
         
-        tree.pack(fill=BOTH, expand=True, side=LEFT)
         scrollbar = ttk.Scrollbar(frame_lista, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(fill=Y, side=RIGHT)
+        
+        # Usa .pack() aqui para os itens DENTRO do frame_lista
+        scrollbar.pack(side=RIGHT, fill=Y)
+        tree.pack(fill=BOTH, expand=True, side=LEFT)
 
         def _abrir_relatorio_selecionado(event):
             selecionado = tree.selection()
             if not selecionado: return
-            
-            # O ID agora é pego diretamente do item selecionado, e não de uma coluna visível
             id_inventario = selecionado[0]
-            
             top.destroy()
             self.abrir_tela_relatorio(id_inventario)
 
         tree.bind("<Double-1>", _abrir_relatorio_selecionado)
-        
-        # Popula a lista inicialmente (sem filtro de data)
+
+        # --- Conteúdo do Frame de Ações (Baixo) ---
+        def _apagar_inventario_selecionado():
+            selecionados = tree.selection()
+            if not selecionados:
+                messagebox.showwarning("Nenhuma Seleção", "Por favor, selecione ao menos um inventário para apagar.", parent=top)
+                return
+            msg = "Você tem certeza que deseja apagar permanentemente o inventário selecionado?"
+            if len(selecionados) > 1:
+                msg = f"Você tem certeza que deseja apagar permanentemente os {len(selecionados)} inventários selecionados?"
+            resposta = messagebox.askyesno("Confirmar Exclusão", f"{msg}\n\nEsta ação não pode ser desfeita.", parent=top)
+            if resposta:
+                sucessos = 0
+                for inv_id in selecionados:
+                    if crud.cancelar_inventario_db(inv_id):
+                        sucessos += 1
+                messagebox.showinfo("Operação Concluída", f"{sucessos} inventário(s) apagado(s) com sucesso.", parent=top)
+                _buscar_e_popular()
+
+        btn_apagar = ttk.Button(frame_acoes, text="Apagar Inventário(s) Selecionado(s)", command=_apagar_inventario_selecionado, bootstyle=DANGER)
+        btn_apagar.pack(side=RIGHT) # Empacota o botão DENTRO do frame_acoes
+
+        # --- 3. EMPACOTAMENTO FINAL DOS FRAMES PRINCIPAIS NA JANELA ---
+        frame_filtros.pack(fill=X, padx=10, pady=(10,0))
+        frame_acoes.pack(fill=X, side=BOTTOM, padx=10, pady=(0,10))
+        frame_lista.pack(fill=BOTH, expand=True, padx=10, pady=10)
+
+        # Popula a lista inicialmente
         lista_inicial = crud.listar_inventarios_finalizados()
         for inv in lista_inicial:
             data_inicio_fmt = inv['inv_data_inicio'].strftime('%d/%m/%Y %H:%M')
