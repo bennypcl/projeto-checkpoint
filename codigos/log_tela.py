@@ -385,28 +385,38 @@ class Tela:
         if not caminho_arquivo: return
 
         self.dados_originais.clear()
+        self.inventario_iniciado = False
 
         try:
             with open(caminho_arquivo, "r", encoding="utf-8") as f:
                 for i, linha in enumerate(f):
                     linha = linha.strip()
                     if not linha: continue
-                    campos = [campo.strip() for campo in linha.split(';')]
+                    
                     try:
-                        # Pega apenas as 6 primeiras colunas, ignorando qualquer coluna extra no final
+                        campos = [campo.strip() for campo in linha.split(';')]
+                        # Pega apenas as 6 primeiras colunas, ignorando qualquer extra
                         ref, sku, desc, tam, quant_str, valor_str = campos[:6]
-
+                        
                         quant = int(quant_str)
                         valor = float(valor_str.replace(',', '.')) if valor_str.strip() else 0.0
-
+                        
                         iid = f"file_{i}"
                         self.dados_originais.append([iid, ref, sku, desc, tam, quant, valor, ""])
 
                     except (ValueError, IndexError):
                         print(f"AVISO: Linha {i+1} ignorada - formato inválido: {linha}")
                         continue
+            
+            # 1. Verifica se algum produto válido foi de fato lido do arquivo
+            if not self.dados_originais:
+                messagebox.showerror("Arquivo Inválido", "O arquivo selecionado está vazio ou não contém nenhuma linha com formato válido.", parent=self.janela)
+                # Garante que os botões voltem ao estado inicial
+                self.inventario_iniciado = False
+                self._atualizar_estado_botoes_inventario()
+                return # Para a execução da função aqui
 
-            #CRIA O INVENTÁRIO NO BANCO
+            # 2. Se o arquivo é válido, SÓ ENTÃO cria o inventário no banco
             self.id_inventario_ativo = crud.criar_novo_inventario(self.dados_originais)
             
             if self.id_inventario_ativo:
