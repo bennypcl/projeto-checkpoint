@@ -1,172 +1,124 @@
-create database CHECKPOINT;
-use CHECKPOINT;
+-- ===================================================================
+-- SCRIPT DE CRIAÇÃO DO BANCO DE DADOS CHECKPOINT (VERSÃO FINAL)
+-- Este script cria o banco de dados e suas tabelas em seu estado final.
+-- ===================================================================
 
--- TABELA DE USUÁRIOS/FUNCIONÁRIOS:
-create table usuarios (
-	usu_id int auto_increment primary key,
-    usu_cargo enum('Gerente', 'Vendedor(a)') not null,
-    usu_nome varchar(100) not null,
-    usu_cpf char(11) unique not null
-); 
-select * from usuarios;
-desc usuarios;
+-- Passo 1: Apaga o banco de dados antigo (se existir) e cria um novo.
+DROP DATABASE IF EXISTS CHECKPOINT;
+CREATE DATABASE CHECKPOINT;
+USE CHECKPOINT;
 
--- TABELA DE CLIENTES: Armazena informações dos clientes.
-create table clientes (
-	cli_id int auto_increment primary key,
-    cli_cpf char(11) unique not null,
-    cli_nome varchar(100) not null,
-    cli_data_nascimento date,
-    cli_email varchar(100) unique, -- UNIQUE → Garante que não existam emails repetidos no banco de dados.
-    cli_ddd char(2),
-    cli_telefone varchar(9),
-    cli_cep char(8),
-    cli_rua varchar(255),
-    cli_bairro varchar(150),
-    cli_numero varchar(10),
-    cli_complemento varchar(255),
-    cli_uf char(2),
-    cli_cidade varchar(100),
-    cli_data_cadastro timestamp default current_timestamp -- TIMESTAMP → Tipo de dado que armazena data e hora (formato YYYY-MM-DD HH:MI:SS). DEFAULT CURRENT_TIMESTAMP → Se nenhum valor for inserido, o MySQL preenche automaticamente com a data e hora atuais.
+-- ===================================================================
+-- SEÇÃO 1: CRIAÇÃO DAS TABELAS
+-- As tabelas são criadas em uma ordem que respeita as dependências
+-- de chaves estrangeiras.
+-- ===================================================================
+
+-- Tabela de Usuários (Funcionários)
+CREATE TABLE usuarios (
+    usu_id INT AUTO_INCREMENT PRIMARY KEY,
+    usu_cargo ENUM('Gerente', 'Vendedor(a)') NOT NULL,
+    usu_nome VARCHAR(100) NOT NULL,
+    usu_cpf CHAR(11) UNIQUE NOT NULL
 );
 
--- TABELA DE PRODUTOS: Armazena os produtos disponíveis para venda.
-create table produtos (
-	pro_id int auto_increment primary key,
-    pro_ref varchar(5) not null,
-    pro_sku varchar(5) not null,
-    pro_descricao varchar(255) not null,
-    pro_tam varchar(10) not null,
-    pro_cor varchar(100) not null,
-    pro_quant int not null,
-    pro_valor decimal(10,2) not null
+-- Tabela de Clientes
+CREATE TABLE clientes (
+    cli_id INT AUTO_INCREMENT PRIMARY KEY,
+    cli_cpf CHAR(11) UNIQUE NOT NULL,
+    cli_nome VARCHAR(100) NOT NULL,
+    cli_data_nascimento DATE,
+    cli_email VARCHAR(100) UNIQUE,
+    cli_ddd CHAR(2),
+    cli_telefone VARCHAR(9),
+    cli_cep CHAR(8),
+    cli_rua VARCHAR(255),
+    cli_bairro VARCHAR(150),
+    cli_numero VARCHAR(10),
+    cli_complemento VARCHAR(255),
+    cli_uf CHAR(2),
+    cli_cidade VARCHAR(100),
+    cli_data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-select * from produtos;
-desc produtos;
 
--- TABELA DE PEDIDOS: Registra cada pedido realizado.
-create table pedidos (
-	ped_id int auto_increment primary key,
-    cli_id int,
-    ped_data timestamp default current_timestamp,
-    ped_total decimal(10,2) not null,
-    usu_id int not null,
-    foreign key (cli_id) references clientes(cli_id) on delete set null,
-    foreign key (usu_id) references usuarios(usu_id)
+-- Tabela de Produtos (versão final consolidada)
+CREATE TABLE produtos (
+    pro_id INT AUTO_INCREMENT PRIMARY KEY,
+    pro_ref VARCHAR(50) NOT NULL,
+    pro_sku VARCHAR(50) NULL,
+    pro_descricao VARCHAR(255) NOT NULL,
+    pro_tam VARCHAR(50) NULL,
+    pro_bipe VARCHAR(50) NULL UNIQUE,
+    pro_valor DECIMAL(10,2) NULL,
+    pro_caminho_imagem VARCHAR(255)
 );
-select * from pedidos;
-desc pedidos;
 
--- TABELA DE ITENS DO PEDIDO: Relaciona os produtos comprados em cada pedido.
-create table itens_pedido (
-	item_id int auto_increment primary key,
-    ped_id int not null,
-    pro_id int not null,
-    item_quant int not null,
-    item_valor_unitario decimal(10,2) not null,
-    foreign key (ped_id) references pedidos(ped_id) on delete cascade,
-    foreign key (pro_id) references produtos(pro_id)
+-- Tabela de Pedidos (versão final consolidada)
+CREATE TABLE pedidos (
+    ped_id INT AUTO_INCREMENT PRIMARY KEY,
+    cli_id INT,
+    ped_data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ped_total DECIMAL(10,2) NOT NULL,
+    usu_id INT NOT NULL,
+    ped_desconto_info VARCHAR(50),
+    FOREIGN KEY (cli_id) REFERENCES clientes(cli_id) ON DELETE SET NULL,
+    FOREIGN KEY (usu_id) REFERENCES usuarios(usu_id)
 );
-select * from itens_pedido;
-desc itens_pedido;
 
--- TABELA DE PAGAMENTOS (REGISTRO GERAL): Guarda todos os pagamentos, independentemente do tipo.
-create table pagamentos (
-	pag_id int auto_increment primary key,
-    ped_id int not null,
-    pag_metodo enum('Débito', 'Crédito', 'Pix', 'Dinheiro') not null,
-    pag_valor decimal(10,2) not null,
-    foreign key (ped_id) references pedidos(ped_id) on delete cascade
+-- Tabela de Itens do Pedido
+CREATE TABLE itens_pedido (
+    item_id INT AUTO_INCREMENT PRIMARY KEY,
+    ped_id INT NOT NULL,
+    pro_id INT NOT NULL,
+    item_quant INT NOT NULL,
+    item_valor_unitario DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (ped_id) REFERENCES pedidos(ped_id) ON DELETE CASCADE,
+    FOREIGN KEY (pro_id) REFERENCES produtos(pro_id)
 );
-select * from pagamentos;
-desc pagamentos;
 
--- TABELA PARA PAGAMENTO COM CARTÃO DE DÉBITO
-create table debito (
-	pag_id int primary key,
-    deb_tipo_cartao enum('Visa', 'Mastercard', 'Elo', 'American Express', 'Outro') not null,
-    foreign key (pag_id) references pagamentos(pag_id) on delete cascade
+-- Tabela de Pagamentos (Registro Geral)
+CREATE TABLE pagamentos (
+    pag_id INT AUTO_INCREMENT PRIMARY KEY,
+    ped_id INT NOT NULL,
+    pag_metodo ENUM('Débito', 'Crédito', 'Pix', 'Dinheiro') NOT NULL,
+    pag_valor DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (ped_id) REFERENCES pedidos(ped_id) ON DELETE CASCADE
 );
-select * from debito;
-desc debito;
 
--- TABELA PARA PAGAMENTO COM CARTÃO DE CRÉDITO
-create table credito (
-	pag_id int primary key,
-	cre_tipo_cartao enum('Visa', 'Mastercard', 'Elo', 'American Express', 'Outro') not null,
-    cre_parcelas int check (cre_parcelas between 1 and 6) not null,
-    foreign key (pag_id) references pagamentos(pag_id)
+-- Tabelas para os tipos de pagamento
+CREATE TABLE debito (
+    pag_id INT PRIMARY KEY,
+    deb_tipo_cartao ENUM('Visa', 'Mastercard', 'Elo', 'American Express', 'Outro') NOT NULL,
+    FOREIGN KEY (pag_id) REFERENCES pagamentos(pag_id) ON DELETE CASCADE
 );
-select * from credito;
-desc credito;
 
--- TABELA PARA PAGAMENTO COM PIX
-create table pix (
-	pag_id int primary key,
-    pix_chave varchar(255) not null,
-    foreign key (pag_id) references pagamentos(pag_id) on delete cascade
-); 
-select * from pix;
-desc pix;
-
--- TABELA PARA PAGAMENTO EM DINHEIRO
-create table dinheiro (
-	pag_id int primary key,
-    din_troco decimal(10,2) not null,
-    foreign key (pag_id) references pagamentos(pag_id) on delete cascade
+CREATE TABLE credito (
+    pag_id INT PRIMARY KEY,
+    cre_tipo_cartao ENUM('Visa', 'Mastercard', 'Elo', 'American Express', 'Outro') NOT NULL,
+    cre_parcelas INT CHECK (cre_parcelas BETWEEN 1 AND 6) NOT NULL,
+    FOREIGN KEY (pag_id) REFERENCES pagamentos(pag_id) ON DELETE CASCADE
 );
-select * from dinheiro;
-desc dinheiro;
 
--- TABELA PARA TEMAS
-create table temas (
-    tema_id int auto_increment primary key,
-    tema_nome varchar(100) not null,
-    valor varchar(55)
+CREATE TABLE pix (
+    pag_id INT PRIMARY KEY,
+    pix_chave VARCHAR(255) NOT NULL,
+    FOREIGN KEY (pag_id) REFERENCES pagamentos(pag_id) ON DELETE CASCADE
 );
-select * from temas;
-desc temas;
 
-insert into temas (tema_nome, valor) values
-('united', 'escuro'),
-('solar', 'claro');
+CREATE TABLE dinheiro (
+    pag_id INT PRIMARY KEY,
+    din_troco DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (pag_id) REFERENCES pagamentos(pag_id) ON DELETE CASCADE
+);
 
-ALTER TABLE produtos ADD COLUMN pro_caminho_imagem VARCHAR(255);
+-- Tabela de Temas
+CREATE TABLE temas (
+    tema_id INT AUTO_INCREMENT PRIMARY KEY,
+    tema_nome VARCHAR(100) NOT NULL,
+    valor VARCHAR(55)
+);
 
-INSERT INTO produtos (pro_ref, pro_sku, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor, pro_caminho_imagem) 
-VALUES ('P0001', 'S0001', 'Camisetas Batman pdv', 'M', 'Indefinida', 10, 89.90, 'imagens_produtos/batman_camiseta.jpg');
-
-INSERT INTO produtos (pro_ref, pro_sku, pro_descricao, pro_tam, pro_cor, pro_quant, pro_valor, pro_caminho_imagem) 
-VALUES ('P0002', 'S0002', 'Caneca Star Wars', '350ml', 'Indefinida', 0, 49.90, 'imagens_produtos/caneca_star_wars.jpg');
-
-SELECT * FROM pedidos;
-
-ALTER TABLE pedidos ADD COLUMN ped_desconto_info VARCHAR(50);
-
--- CLIENTES OFICIAIS:
-
-SET SQL_SAFE_UPDATES = 0; -- EXECUTAR SEMPRE ANTES DE LIMPAR TABELAS -----------------------
-DELETE FROM clientes;
-ALTER TABLE clientes AUTO_INCREMENT = 1;
-SET SQL_SAFE_UPDATES = 1; -- EXECUTAR SEMPRE DEPOIS DE LIMPAR TABELAS -----------------------
-
-SHOW VARIABLES LIKE 'secure_file_priv';
-
-LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/clientes.csv' 
-INTO TABLE clientes 
-CHARACTER SET utf8mb4 
-FIELDS TERMINATED BY ',' 
-ENCLOSED BY '"' 
-LINES TERMINATED BY '\r\n' 
-IGNORE 1 ROWS 
-(cli_cpf, cli_nome, cli_ddd, cli_telefone, @cli_data_nascimento) 
-SET cli_data_nascimento = NULLIF(@cli_data_nascimento, '');
-
-SELECT * FROM clientes;
-
--- INVENTÁRIOS:
-
--- TABELA MESTRE PARA REGISTRAR CADA INVENTÁRIO
+-- Tabela Mestre de Inventários
 CREATE TABLE inventarios (
     inv_id INT AUTO_INCREMENT PRIMARY KEY,
     inv_data_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -174,98 +126,109 @@ CREATE TABLE inventarios (
     inv_status ENUM('Em Andamento', 'Finalizado', 'Cancelado') NOT NULL
 );
 
--- TABELA DE DETALHES PARA GUARDAR CADA ITEM CONTADO EM UM INVENTÁRIO
+-- Tabela de Itens de Inventário (versão final consolidada)
 CREATE TABLE inventario_itens (
     item_inv_id INT AUTO_INCREMENT PRIMARY KEY,
     inv_id INT NOT NULL,
-    pro_id INT NOT NULL,
+    pro_id INT NULL,
     quantidade_sistema INT NOT NULL,
     quantidade_contada INT,
+    item_sku VARCHAR(255),
+    item_ref VARCHAR(255),
+    item_descricao VARCHAR(255),
+    item_tam VARCHAR(255),
+    item_valor DECIMAL(10,2),
     FOREIGN KEY (inv_id) REFERENCES inventarios(inv_id) ON DELETE CASCADE,
     FOREIGN KEY (pro_id) REFERENCES produtos(pro_id)
 );
 
-select * from inventarios;
-select * from inventario_itens;
+-- ===================================================================
+-- SEÇÃO 2: INSERÇÃO DE DADOS INICIAIS E PADRÕES
+-- ===================================================================
 
-ALTER TABLE inventario_itens 
-MODIFY COLUMN pro_id INT NULL,
-ADD COLUMN item_sku VARCHAR(255),
-ADD COLUMN item_ref VARCHAR(255),
-ADD COLUMN item_descricao VARCHAR(255),
-ADD COLUMN item_tam VARCHAR(255),
-ADD COLUMN item_valor DECIMAL(10,2);
+-- Inserção de temas padrão
+INSERT INTO temas (tema_nome, valor) VALUES
+('united', 'escuro'),
+('solar', 'claro');
 
--- CORREÇÃO DE PRODUTOS:
-
-ALTER TABLE produtos
-    -- Removendo COR e QUANTIDADE
-    DROP COLUMN pro_cor,
-    DROP COLUMN pro_quant,
-    
-    ADD COLUMN pro_bipe VARCHAR(50) NULL UNIQUE AFTER pro_tam,
-
-    -- REF e SKU para TEXTO com tamanho maior
-    MODIFY COLUMN pro_ref VARCHAR(50) NOT NULL,
-    MODIFY COLUMN pro_sku VARCHAR(50) NULL,
-
-    -- Aumenta o tamanho do Tamanho/Capacidade e o torna opcional
-    MODIFY COLUMN pro_tam VARCHAR(50) NULL,
-
-    -- Torna o Valor opcional
-    MODIFY COLUMN pro_valor DECIMAL(10,2) NULL;
-
-select * from produtos;
-
--- Funcionárias reais:
-
--- PROCURAR O COISO DE DESTRAVAR A SEGURANÇA --
-
-DELETE FROM credito;
-DELETE FROM itens_pedido;
-DELETE FROM pagamentos;
-DELETE FROM pedidos;
-DELETE FROM usuarios WHERE usu_nome != 'Troca';
-
-ALTER TABLE pedidos AUTO_INCREMENT = 1;
-ALTER TABLE itens_pedido AUTO_INCREMENT = 1;
-ALTER TABLE pagamentos AUTO_INCREMENT = 1;
-ALTER TABLE usuarios AUTO_INCREMENT = 1;
-
--- TRAVAR A SEGURANÇA DE NOVO --
-
-SELECT 'Limpeza definitiva concluída com sucesso!' AS status;
-
-insert into usuarios (usu_cargo, usu_nome, usu_cpf) values
+-- Inserção de funcionárias
+INSERT INTO usuarios (usu_cargo, usu_nome, usu_cpf) VALUES
 ('Gerente', 'JENNIFER SILVA SOMBRA', '05230937211'),
 ('Vendedor(a)', 'ANA CÉLIA DE SOUZA DA SILVA', '04605059202'),
 ('Vendedor(a)', 'MARIA VITÓRIA RODRIGUES ARAÚJO', '09329324209'),
 ('Vendedor(a)', 'NIZIA ESTELA SILVA ARAÚJO', '05268006231');
 
-UPDATE usuarios 
-SET usu_nome = 'TROCA' 
-WHERE usu_cpf = '00000000000';
+-- Inserção do usuário especial para Trocas
+INSERT INTO usuarios (usu_nome, usu_cpf, usu_cargo) VALUES ('TROCA', '00000000000', 'Vendedor(a)');
 
--- PRODUTOS REAIS (TESTE):
-delete from inventario_itens;
-DELETE FROM produtos;
+SELECT 'Estrutura do banco e dados iniciais criados com sucesso!' AS status;
 
-LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/produtos1.csv' 
-INTO TABLE produtos 
+-- ===================================================================
+-- SEÇÃO 3: CARGA DE DADOS EXTERNOS (COM LIMPEZA)
+-- Execute os blocos abaixo conforme a necessidade de importar dados.
+--
+-- !! ATENÇÃO !!
+-- O comando LOAD DATA INFILE requer que a variável global
+-- 'secure_file_priv' do MySQL esteja configurada para permitir
+-- o acesso à pasta onde os arquivos .csv estão localizados.
+-- ===================================================================
+
+-- ----- BLOCO PARA IMPORTAR CLIENTES -----
+-- 1. Desabilita o modo de atualização segura para permitir o DELETE sem WHERE.
+SET SQL_SAFE_UPDATES = 0;
+-- 2. Limpa todos os registros existentes na tabela de clientes.
+DELETE FROM clientes;
+-- 3. Reinicia o contador de ID para que os novos registros comecem do 1.
+ALTER TABLE clientes AUTO_INCREMENT = 1;
+-- 4. Reabilita o modo de atualização segura.
+SET SQL_SAFE_UPDATES = 1;
+
+-- 5. Carrega os dados do arquivo CSV para a tabela.
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/clientes.csv'
+INTO TABLE clientes
 CHARACTER SET utf8mb4
-FIELDS TERMINATED BY ',' 
+FIELDS TERMINATED BY ','
 ENCLOSED BY '"'
 LINES TERMINATED BY '\r\n'
 IGNORE 1 ROWS
+(cli_cpf, cli_nome, cli_ddd, cli_telefone, @cli_data_nascimento)
+SET cli_data_nascimento = NULLIF(@cli_data_nascimento, '');
+
+SELECT 'Importação de CLIENTES finalizada.' AS status;
+
+
+-- ----- BLOCO PARA IMPORTAR PRODUTOS -----
+-- 1. Desabilita o modo de atualização segura.
+-- ----- BLOCO PARA IMPORTAR PRODUTOS (CORRIGIDO SEM IGNORE 1 ROWS) -----
+-- 1. Desabilita o modo de atualização segura.
+SET SQL_SAFE_UPDATES = 0;
+-- 2. Limpa tabelas que dependem de 'produtos' e a própria tabela 'produtos'.
+DELETE FROM inventario_itens;
+DELETE FROM itens_pedido;
+DELETE FROM produtos;
+-- 3. Reinicia os contadores de ID.
+ALTER TABLE inventario_itens AUTO_INCREMENT = 1;
+ALTER TABLE itens_pedido AUTO_INCREMENT = 1;
+ALTER TABLE produtos AUTO_INCREMENT = 1;
+-- 4. Reabilita o modo de atualização segura.
+SET SQL_SAFE_UPDATES = 1;
+
+-- 5. Carrega os dados do arquivo CSV para a tabela.
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/produtos1.csv'
+INTO TABLE produtos
+CHARACTER SET utf8mb4
+FIELDS TERMINATED BY ','
+ENCLOSED BY '"'
+LINES TERMINATED BY '\r\n'
+-- A LINHA "IGNORE 1 ROWS" FOI REMOVIDA DAQUI
 (pro_ref, @pro_sku, pro_descricao, @pro_tam, @pro_bipe, @pro_valor, @pro_caminho_imagem)
-SET 
+SET
     pro_sku = NULLIF(@pro_sku, ''),
     pro_tam = NULLIF(@pro_tam, ''),
     pro_bipe = NULLIF(@pro_bipe, ''),
     pro_valor = NULLIF(@pro_valor, ''),
     pro_caminho_imagem = NULLIF(@pro_caminho_imagem, '');
 
--- --------------------------------------------------------
+SELECT 'Importação de PRODUTOS finalizada.' AS status;
 
-SELECT * FROM inventarios;
-delete from produtos where pro_descricao = "TESTE";
+
