@@ -268,4 +268,4 @@ SET
 -- --------------------------------------------------------
 
 SELECT * FROM inventarios;
-delete from inventarios where inv_id='21';
+delete from produtos where pro_descricao = "TESTE";

@@ -328,7 +328,7 @@ def buscar_vendas_para_relatorio(vendedor=None, data_inicio=None, data_fim=None)
         
         for venda in vendas:
             sql_itens = """
-                SELECT p.pro_descricao, ip.item_valor_unitario
+                SELECT p.pro_descricao, p.pro_sku, p.pro_tam, ip.item_valor_unitario
                 FROM itens_pedido ip
                 JOIN produtos p ON ip.pro_id = p.pro_id
                 WHERE ip.ped_id = %s
@@ -336,13 +336,18 @@ def buscar_vendas_para_relatorio(vendedor=None, data_inicio=None, data_fim=None)
             cursor.execute(sql_itens, (venda['ped_id'],))
             itens = cursor.fetchall()
             
-            # Formata a lista de produtos, adicionando [DEVOLUÇÃO] se o preço for negativo
             lista_produtos_formatada = []
             for item in itens:
+                # Garante que SKU e Tam sejam textos, mesmo se forem nulos no banco
+                sku = item.get('pro_sku') or 'N/A'
+                tam = item.get('pro_tam') or 'N/A'
+                
+                info_str = f"{item['pro_descricao']} (SKU: {sku}, Tam: {tam})"
+                
                 if item['item_valor_unitario'] < 0:
-                    lista_produtos_formatada.append(f"[DEVOLUÇÃO] {item['pro_descricao']}")
+                    lista_produtos_formatada.append(f"[DEVOLUÇÃO] {info_str}")
                 else:
-                    lista_produtos_formatada.append(item['pro_descricao'])
+                    lista_produtos_formatada.append(info_str)
             venda['produtos'] = lista_produtos_formatada
 
             # Busca os pagamentos do pedido
@@ -353,20 +358,17 @@ def buscar_vendas_para_relatorio(vendedor=None, data_inicio=None, data_fim=None)
 
             # Organiza os dados do cliente em um sub-dicionário
             venda['cliente'] = {
-                'nome': venda.pop('cli_nome') or 'N/A', # Usa 'N/A' se o nome for nulo
+                'nome': venda.pop('cli_nome') or 'N/A',
                 'cpf': venda.pop('cli_cpf') or '',
                 'telefone': venda.pop('cli_telefone') or '',
                 'nascimento': venda.pop('cli_data_nascimento')
             }
-            # Formata a data de nascimento para texto, se ela existir
             if venda['cliente']['nascimento']:
                 venda['cliente']['nascimento'] = venda['cliente']['nascimento'].strftime("%d/%m/%Y")
             else:
-                venda['cliente']['nascimento'] = '' # Garante que seja uma string vazia
+                venda['cliente']['nascimento'] = ''
             
-            # Formata a data do pedido
             venda['ped_data'] = venda['ped_data'].strftime("%d/%m/%Y %H:%M")
-            # Renomeia a chave do desconto para corresponder ao esperado pela interface
             venda['desconto'] = venda.pop('ped_desconto_info') or ''
 
         return vendas
@@ -693,6 +695,98 @@ def atualizar_caminho_imagem_produto(ref_produto, caminho_imagem):
         return True
     except Exception as e:
         messagebox.showerror("Erro de BD", f"Falha ao atualizar caminho da imagem: {e}")
+        return False
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def decrementar_estoque_item_inventario(id_inventario, sku_produto):
+    """
+    Decrementa em 1 a quantidade_sistema e, se não for nula, a quantidade_contada
+    de um item específico no inventário ativo.
+    """
+    try:
+        conn = conectar()
+        if not conn: return False
+        cursor = conn.cursor()
+
+        # Descobre o pro_id para produtos conhecidos
+        cursor.execute("SELECT pro_id FROM produtos WHERE pro_sku = %s", (sku_produto,))
+        resultado_produto = cursor.fetchone()
+
+        if resultado_produto:
+            # Se o produto é CONHECIDO, atualiza usando o pro_id
+            pro_id = resultado_produto[0]
+            sql = """
+                UPDATE inventario_itens
+                SET
+                    quantidade_sistema = quantidade_sistema - 1,
+                    quantidade_contada = IF(quantidade_contada IS NOT NULL, quantidade_contada - 1, NULL)
+                WHERE inv_id = %s AND pro_id = %s
+            """
+            cursor.execute(sql, (id_inventario, pro_id))
+        else:
+            # Se o produto é DESCONHECIDO, atualiza usando o item_sku
+            sql = """
+                UPDATE inventario_itens
+                SET
+                    quantidade_sistema = quantidade_sistema - 1,
+                    quantidade_contada = IF(quantidade_contada IS NOT NULL, quantidade_contada - 1, NULL)
+                WHERE inv_id = %s AND item_sku = %s AND pro_id IS NULL
+            """
+            cursor.execute(sql, (id_inventario, sku_produto))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao decrementar estoque do item: {e}")
+        return False
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def incrementar_estoque_item_inventario(id_inventario, sku_produto):
+    """
+    Incrementa em 1 a quantidade_sistema e, se não for nula, a quantidade_contada
+    de um item específico no inventário ativo (usado para devoluções).
+    """
+    try:
+        conn = conectar()
+        if not conn: return False
+        cursor = conn.cursor()
+
+        # Descobre o pro_id para produtos conhecidos
+        cursor.execute("SELECT pro_id FROM produtos WHERE pro_sku = %s", (sku_produto,))
+        resultado_produto = cursor.fetchone()
+
+        if resultado_produto:
+            # Se o produto é CONHECIDO, atualiza usando o pro_id
+            pro_id = resultado_produto[0]
+            sql = """
+                UPDATE inventario_itens
+                SET
+                    quantidade_sistema = quantidade_sistema + 1,
+                    quantidade_contada = IF(quantidade_contada IS NOT NULL, quantidade_contada + 1, NULL)
+                WHERE inv_id = %s AND pro_id = %s
+            """
+            cursor.execute(sql, (id_inventario, pro_id))
+        else:
+            # Se o produto é DESCONHECIDO, atualiza usando o item_sku
+            sql = """
+                UPDATE inventario_itens
+                SET
+                    quantidade_sistema = quantidade_sistema + 1,
+                    quantidade_contada = IF(quantidade_contada IS NOT NULL, quantidade_contada + 1, NULL)
+                WHERE inv_id = %s AND item_sku = %s AND pro_id IS NULL
+            """
+            cursor.execute(sql, (id_inventario, sku_produto))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        messagebox.showerror("Erro de BD", f"Falha ao incrementar estoque do item: {e}")
         return False
     finally:
         if conn and conn.is_connected():

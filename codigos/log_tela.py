@@ -60,12 +60,14 @@ class Tela:
         self.gerenciador_tema = GerenciadorTema(self.janela)
         self.tela_relatorio_vendas = TelaRelatorioVendas(self.janela)
         self.tela_consulta = Consultas(self.janela, self.mapa_imagens)
-        self.tela_venda = TelaPontoVenda(self.janela, self.vendas_realizadas, self.tela_consulta)
+        self.tela_venda = TelaPontoVenda(self.janela, self.vendas_realizadas, self.tela_consulta, callback_venda_finalizada=self.atualizar_estoque_pos_venda)
         self.relatorio = gerar_relatorio_pdf
 
         self.inventario_iniciado = False
         self.inventario_modificado = False
         self.id_inventario_ativo = None
+        self.ultimo_filtro_botao = None
+        self.search_var_inventario = tk.StringVar()
         self.sku_contagem_var = tk.StringVar()
 
     def carregar_mapa_de_imagens(self):
@@ -171,11 +173,11 @@ class Tela:
         colunas = ("ref", "sku", "desc", "tam", "preco", "est", "est_real")
         self.tvw_inventario = ttk.Treeview(frm_treeview, columns=colunas, show="headings", height=15)
         
+        self.tvw_inventario.tag_configure("zerado", background="lightgrey")
+        self.tvw_inventario.tag_configure("diferente", background="red")
+        self.tvw_inventario.tag_configure("negativado", background="red")
         self.tvw_inventario.tag_configure("sigla_pdv", background="yellow")
-        self.tvw_inventario.tag_configure("zerado", background="lightgray")
-        self.tvw_inventario.tag_configure("diferente", background="red", foreground="white")
         self.tvw_inventario.tag_configure("igual", background="lightgreen")
-        # Tags compostas foram removidas para simplificar, a lógica de múltiplas tags já cobre isso
         
         self.tvw_inventario.heading("ref", text="Ref"); self.tvw_inventario.column("ref", width=70, anchor=CENTER)
         self.tvw_inventario.heading("sku", text="SKU"); self.tvw_inventario.column("sku", width=70, anchor=CENTER)
@@ -202,13 +204,13 @@ class Tela:
         self.lbl_visual = ttk.Label(frm_filtros, text="Filtrar Lista:"); self.lbl_visual.pack(side=TOP, anchor="w", padx=5, pady=5)
         frm_botoes_grid = ttk.Frame(frm_filtros); frm_botoes_grid.pack(fill=X, expand=True); frm_botoes_grid.columnconfigure(tuple(range(4)), weight=1)
         self.btn_todos = ttk.Button(frm_botoes_grid, text="Mostrar Todos", command=lambda: self.filtrar_treeview(None)); self.btn_todos.grid(row=0, column=0, padx=5, pady=3, sticky='ew')
-        self.btn_pdv = ttk.Button(frm_botoes_grid, text="PDV", command=lambda: self.filtrar_treeview(("descricao", "pdv"))); self.btn_pdv.grid(row=0, column=1, padx=5, pady=3, sticky='ew')
+        self.btn_pdv = ttk.Button(frm_botoes_grid, text="Produtos PDV", command=lambda: self.filtrar_treeview(("descricao", "pdv"))); self.btn_pdv.grid(row=0, column=1, padx=5, pady=3, sticky='ew')
         self.btn_negativos = ttk.Button(frm_botoes_grid, text="Negativados", command=lambda: self.filtrar_treeview(("quantidade", "<0"))); self.btn_negativos.grid(row=0, column=2, padx=5, pady=3, sticky='ew')
         self.btn_zerados = ttk.Button(frm_botoes_grid, text="Zerados", command=lambda: self.filtrar_treeview(("quantidade", "0"))); self.btn_zerados.grid(row=0, column=3, padx=5, pady=3, sticky='ew')
         self.btn_camisetas = ttk.Button(frm_botoes_grid, text="Camisetas", command=lambda: self.filtrar_treeview(("descricao", "Camiseta"))); self.btn_camisetas.grid(row=1, column=0, padx=5, pady=3, sticky='ew')
         self.btn_meias = ttk.Button(frm_botoes_grid, text="Meias", command=lambda: self.filtrar_treeview(("descricao", "Meia"))); self.btn_meias.grid(row=1, column=1, padx=5, pady=3, sticky='ew')
-        self.btn_bones = ttk.Button(frm_botoes_grid, text="Bonés", command=lambda: self.filtrar_treeview(("descricao", "Boné"))); self.btn_bones.grid(row=1, column=2, padx=5, pady=3, sticky='ew')
-        self.btn_copos = ttk.Button(frm_botoes_grid, text="Copos", command=lambda: self.filtrar_treeview(("descricao", "Copo"))); self.btn_copos.grid(row=1, column=3, padx=5, pady=3, sticky='ew')
+        self.btn_bones = ttk.Button(frm_botoes_grid, text="Bonés", command=lambda: self.filtrar_treeview(("descricao", "Bone"))); self.btn_bones.grid(row=1, column=2, padx=5, pady=3, sticky='ew')
+        self.btn_copos = ttk.Button(frm_botoes_grid, text="Mixes", command=lambda: self.filtrar_treeview(("descricao", ["Copo", "Garrafa", "Caneca"]))); self.btn_copos.grid(row=1, column=3, padx=5, pady=3, sticky='ew')
 
         self.frm_imagem_display = ttk.Frame(self.frm_principal_inventario)
         self.frm_imagem_display.grid(row=0, column=1, sticky="nsew", pady=(10,0))
@@ -588,58 +590,79 @@ class Tela:
             top.title("Cadastrar Novo Produto")
 
     def filtrar_treeview(self, criterio_tupla=None):
-        self.tvw_inventario.delete(*self.tvw_inventario.get_children())
+        self.ultimo_filtro_botao = criterio_tupla # Movemos a linha para fora do 'if'
         
+        self.tvw_inventario.delete(*self.tvw_inventario.get_children())
+
         for item_data in self.dados_originais:
+            # --- Bloco de Filtros (Botões e Busca por Texto) ---
             mostrar = True
-            if criterio_tupla:
-                coluna, valor_busca = criterio_tupla
-                idx_map = {"descricao": 3, "quantidade": 5}
+            if self.ultimo_filtro_botao:
+                coluna, valor_busca = self.ultimo_filtro_botao
+                idx_map = {"descricao": 3, "quantidade": 5, "est_real": 7}
                 idx = idx_map.get(coluna)
-                
                 if idx is not None:
                     if coluna == "quantidade":
                         try:
                             quant_item = int(item_data[idx])
                             if valor_busca == "<0" and quant_item >= 0: mostrar = False
                             if valor_busca == "0" and quant_item != 0: mostrar = False
-                        except (ValueError, IndexError): mostrar = False
-                    elif valor_busca.lower() not in str(item_data[idx]).lower():
-                        mostrar = False
-
-            if mostrar:
-                # Extrai todos os dados da lista
+                        except (ValueError, IndexError):
+                            mostrar = False
+                    elif coluna == "est_real":
+                        if valor_busca == "vazio" and str(item_data[idx]).strip() != "":
+                            mostrar = False
+                    elif isinstance(valor_busca, list):
+                        item_texto = str(item_data[idx]).lower()
+                        if not any(palavra.lower() in item_texto for palavra in valor_busca): mostrar = False
+                    else:
+                        if valor_busca.lower() not in str(item_data[idx]).lower(): mostrar = False
+            
+            pesquisa_ok = True
+            termo_busca = self.search_var_inventario.get().lower().strip()
+            if termo_busca:
+                ref, sku, desc = item_data[1], item_data[2], item_data[3]
+                if not (termo_busca in str(ref).lower() or termo_busca in str(sku).lower() or termo_busca in str(desc).lower()):
+                    pesquisa_ok = False
+            
+            if mostrar and pesquisa_ok:
                 iid, ref, sku, desc, tam, quant, valor, est_real = item_data
-                
-                # Inicia a lista de tags a serem aplicadas
+
                 tags_aplicar = []
                 
-                # Lógica para tags de status (PDV, Zerado, Negativado)
-                if "pdv" in str(desc).lower():
-                    tags_aplicar.append("sigla_pdv")
+                # Condições de estado da contagem
+                is_divergente = False
+                is_igual = False
+                est_real_str = str(est_real).strip()
                 
-                # A tag "diferente" (vermelha) tem prioridade sobre zerado/negativado
-                if quant < 0:
-                    tags_aplicar.append("diferente") # Negativo é sempre uma divergência
-                elif quant == 0:
-                    tags_aplicar.append("zerado")
-
-                # Lógica para tags de comparação (Diferente, Igual)
-                if str(est_real).strip():
+                if est_real_str: # Se uma contagem foi feita
                     try:
                         comparacao_igual = (int(quant) == int(est_real))
                     except (ValueError, TypeError):
-                        comparacao_igual = (str(quant) == str(est_real))
+                        comparacao_igual = (str(quant) == est_real_str)
                     
-                    if not comparacao_igual:
-                        # Se já não for vermelho por ser negativo, aplica a cor
-                        if "diferente" not in tags_aplicar:
-                             tags_aplicar.append("diferente")
+                    if comparacao_igual:
+                        is_igual = True
                     else:
-                        tags_aplicar.append("igual")
+                        is_divergente = True
 
-                valor_formatado = f"{valor:.2f}" if valor is not None else "" # Formata apenas se o valor não for nulo
+                # Tags de cor com PRIORIDADE
+                if is_divergente:
+                    tags_aplicar.append('diferente') # Vermelho (Máxima prioridade)
+                elif is_igual:
+                    tags_aplicar.append('igual')     # Verde
+                elif quant < 0:
+                    tags_aplicar.append('negativado')# Vermelho (estoque do sistema negativado)
+                elif quant == 0:
+                    tags_aplicar.append('zerado')    # Cinza
+
+                # Tag PDV
+                if "pdv" in str(desc).lower():
+                    tags_aplicar.append("sigla_pdv") # Amarelo
+
+                valor_formatado = f"{valor:.2f}" if valor is not None else ""
                 valores_display = (ref, sku, desc, tam, valor_formatado, quant, est_real)
+                
                 self.tvw_inventario.insert("", "end", iid=iid, values=valores_display, tags=tuple(tags_aplicar))
 
     def editar_celula(self, event):
@@ -716,20 +739,34 @@ class Tela:
         if not self.inventario_iniciado:
             return
         
-        if not self.inventario_modificado:
-            messagebox.showwarning("Nenhuma Alteração", "O inventário não pode ser finalizado, pois nenhuma contagem foi realizada.", parent=self.janela)
-            return
+        # A verificação de 'modificado' foi REMOVIDA daqui.
 
-        if crud.finalizar_inventario_db(self.id_inventario_ativo):
-            messagebox.showinfo("Sucesso", "Inventário finalizado e salvo no banco de dados.", parent=self.janela)
+        # 1. Verifica se há itens com contagem pendente
+        itens_pendentes = [item for item in self.dados_originais if str(item[7]).strip() == ""]
         
-            # Reseta a interface e os status APÓS o sucesso
-            self.dados_originais.clear()
-            self.inventario_iniciado = False
-            self.inventario_modificado = False
-            self.id_inventario_ativo = None # Limpa o ID do inventário ativo
-            self.filtrar_treeview(None)
-            self._atualizar_estado_botoes_inventario()
+        decisao_usuario = "finalizar"
+        
+        if itens_pendentes:
+            # 2. Se houver, chama o novo diálogo
+            decisao_usuario = self._dialogo_inventario_incompleto(len(itens_pendentes))
+
+        # 3. Age de acordo com a decisão do usuário
+        if decisao_usuario == "finalizar":
+            if crud.finalizar_inventario_db(self.id_inventario_ativo):
+                messagebox.showinfo("Sucesso", "Inventário finalizado e salvo no banco de dados.", parent=self.janela)
+                # Reseta a interface após o sucesso
+                self.dados_originais.clear()
+                self.inventario_iniciado = False
+                self.inventario_modificado = False
+                self.id_inventario_ativo = None
+                self.filtrar_treeview(None)
+                self._atualizar_estado_botoes_inventario()
+        
+        elif decisao_usuario == "ver_pendentes":
+            # Aplica o filtro para mostrar apenas os itens não contados
+            self.filtrar_treeview(("est_real", "vazio"))
+        
+        # Se a decisão for "cancelar" ou None, não faz nada.
 
     def _atualizar_estado_botoes_inventario(self):
         if self.inventario_iniciado:
@@ -888,6 +925,95 @@ class Tela:
             data_fim_fmt = inv['inv_data_finalizacao'].strftime('%d/%m/%Y %H:%M') if inv.get('inv_data_finalizacao') else "N/A"
             nome_inventario = f"Inventário - {data_fim_fmt}"
             tree.insert("", END, iid=inv['inv_id'], values=(nome_inventario, data_inicio_fmt, data_fim_fmt))
+
+    def _dialogo_inventario_incompleto(self, contagem_pendentes):
+        self._dialogo_resultado = None
+        
+        dialog = Toplevel(self.janela)
+        dialog.title("Atenção: Inventário Incompleto")
+        dialog.geometry("450x200")
+        dialog.resizable(False, False)
+        dialog.transient(self.janela)
+        dialog.grab_set()
+
+        # --- BLOCO DE CÓDIGO PARA CENTRALIZAR A JANELA ---
+        dialog.update_idletasks() 
+
+        main_x = self.janela.winfo_x()
+        main_y = self.janela.winfo_y()
+        main_width = self.janela.winfo_width()
+        main_height = self.janela.winfo_height()
+
+        dialog_width = dialog.winfo_width()
+        dialog_height = dialog.winfo_height()
+
+        pos_x = main_x + (main_width // 2) - (dialog_width // 2)
+        pos_y = main_y + (main_height // 2) - (dialog_height // 2)
+        
+        dialog.geometry(f"+{pos_x}+{pos_y}")
+        # --- FIM DO BLOCO DE CENTRALIZAÇÃO ---
+
+        main_frame = ttk.Frame(dialog, padding=20)
+        main_frame.pack(fill=BOTH, expand=True)
+
+        main_frame.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(0, weight=1)
+
+        mensagem = f"Existem {contagem_pendentes} produto(s) que ainda não foram contados.\n\nO que você deseja fazer?"
+        
+        ttk.Label(main_frame, text=mensagem, wraplength=400, justify=CENTER).grid(row=0, column=0)
+        
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.grid(row=1, column=0, pady=(20, 0))
+
+        def _acao(resultado):
+            self._dialogo_resultado = resultado
+            dialog.destroy()
+
+        ttk.Button(btn_frame, text="Finalizar Mesmo Assim", command=lambda: _acao("finalizar"), bootstyle=PRIMARY).pack(side=LEFT, padx=5)
+        ttk.Button(btn_frame, text="Ver Itens Pendentes", command=lambda: _acao("ver_pendentes"), bootstyle=INFO).pack(side=LEFT, padx=5)
+        ttk.Button(btn_frame, text="Cancelar", command=lambda: _acao("cancelar"), bootstyle=SECONDARY).pack(side=LEFT, padx=5)
+        
+        self.janela.wait_window(dialog)
+        return self._dialogo_resultado
+
+    def atualizar_estoque_pos_venda(self, produtos_da_transacao):
+        """
+        Callback chamado após uma venda. Verifica cada item:
+        - Se o preço for positivo (venda), decrementa o estoque.
+        - Se o preço for negativo (devolução), incrementa o estoque.
+        """
+        if not self.inventario_iniciado:
+            return
+
+        for produto_transacao in produtos_da_transacao:
+            sku = produto_transacao['codigo']
+            preco = produto_transacao['preco']
+
+            # Encontra o item correspondente na lista do inventário
+            for i, item_inventario in enumerate(self.dados_originais):
+                if item_inventario[2] == sku:
+                    
+                    # Lógica para Venda (preço > 0)
+                    if preco > 0:
+                        crud.decrementar_estoque_item_inventario(self.id_inventario_ativo, sku)
+                        self.dados_originais[i][5] -= 1 # Atualiza Estoque na tela
+                        est_real_str = str(self.dados_originais[i][7]).strip()
+                        if est_real_str:
+                            self.dados_originais[i][7] = int(est_real_str) - 1 # Atualiza Est. Real na tela
+
+                    # Lógica para Devolução (preço < 0)
+                    elif preco < 0:
+                        crud.incrementar_estoque_item_inventario(self.id_inventario_ativo, sku)
+                        self.dados_originais[i][5] += 1 # Atualiza Estoque na tela
+                        est_real_str = str(self.dados_originais[i][7]).strip()
+                        if est_real_str:
+                            self.dados_originais[i][7] = int(est_real_str) + 1 # Atualiza Est. Real na tela
+                    
+                    break # Para o loop interno qnd achar o produto
+        
+        # Atualiza a tabela na tela para mostrar os novos valores
+        self.filtrar_treeview(None)
 
 if __name__ == "__main__":
     janela = ttk.Window(themename='united')

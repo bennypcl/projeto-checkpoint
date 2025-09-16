@@ -18,10 +18,11 @@ from crud import (
 from crud import listar_usuarios
 
 class TelaPontoVenda:
-    def __init__(self, master, lista_de_vendas_global, tela_consulta_ref):
+    def __init__(self, master, vendas_realizadas_ref, tela_consulta, callback_venda_finalizada=None):
         self.master = master
-        self.lista_de_vendas_global = lista_de_vendas_global
-        self.tela_consulta_ref = tela_consulta_ref # Guarda a referência
+        self.lista_de_vendas_global = vendas_realizadas_ref
+        self.tela_consulta_ref = tela_consulta # Guarda a referência
+        self.callback_venda_finalizada = callback_venda_finalizada
         self.janela_pdv = None
         self.vendedor_selecionado = None
         self.dados_cliente = {}
@@ -141,7 +142,7 @@ class TelaPontoVenda:
                 self.vendedor_selecionado_id = usuario['usu_id']
                 break
 
-        if self.vendedor_selecionado == "Troca":
+        if self.vendedor_selecionado == "TROCA":
             self.modo_manipulacao = "devolver"
         else:
             self.modo_manipulacao = "adicionar"
@@ -501,12 +502,12 @@ class TelaPontoVenda:
 
     def set_modo_devolver(self):
         # Apenas permite o modo de devolução se o vendedor for "Troca"
-        if self.vendedor_selecionado == "Troca":
+        if self.vendedor_selecionado == "TROCA":
             self.modo_manipulacao = "devolver"
             self._atualizar_estilo_botoes_modo()
             self.entry_produto.focus_set()
         else:
-            messagebox.showwarning("Acesso Negado", "Apenas o vendedor 'Troca' pode processar devoluções.", parent=self.janela_pdv)
+            messagebox.showwarning("Acesso Negado", "Apenas o vendedor 'TROCA' pode processar devoluções.", parent=self.janela_pdv)
 
     def processar_produto_entry(self):
         """Executa a ação correta com base no modo de manipulação ativo."""
@@ -569,7 +570,7 @@ class TelaPontoVenda:
         self.btn_remover_por_nome = ttk.Button(frame_botoes_produto, text="Remover", command=self.set_modo_remover)
         self.btn_remover_por_nome.grid(row=0, column=1, sticky="ew", padx=2)
 
-        estado_devolver = "normal" if self.vendedor_selecionado == "Troca" else "disabled"
+        estado_devolver = "normal" if self.vendedor_selecionado == "TROCA" else "disabled"
         self.btn_devolver = ttk.Button(frame_botoes_produto, text="Devolver", command=self.set_modo_devolver, state=estado_devolver)
         self.btn_devolver.grid(row=0, column=2, sticky="ew", padx=2)
         
@@ -672,7 +673,7 @@ class TelaPontoVenda:
         self.btn_limpar_desconto = ttk.Button(frame_desconto, text="Limpar", command=self.limpar_desconto, bootstyle=(SECONDARY, OUTLINE))
         self.btn_limpar_desconto.grid(row=0, column=3, sticky="ew", padx=(0,5), pady=5, rowspan=2)
 
-        if self.vendedor_selecionado == "Troca":
+        if self.vendedor_selecionado == "TROCA":
             # Desabilita todos os widgets dentro do frame de desconto
             self.radio_pct.config(state="disabled")
             self.radio_rs.config(state="disabled")
@@ -1132,6 +1133,9 @@ class TelaPontoVenda:
         if salvar_venda_completa(dados_da_venda):
             # Se a venda foi salva com sucesso no banco...
             messagebox.showinfo("Sucesso", "Venda realizada!", parent=self.janela_pdv)
+            # CALLBACK PARA ATUALIZAR O INVENTÁRIO:
+            if self.callback_venda_finalizada:
+                self.callback_venda_finalizada(self.produtos_na_venda)
             
             # Gera os tickets de troca, se o checkbox estiver marcado
             if self.imprimir_ticket_var.get():
