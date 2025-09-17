@@ -17,7 +17,7 @@ def inserir_usuario(cargo, nome, cpf):
         return True
         
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao inserir usuário: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao inserir usuário: {e}")
         return False
         
     finally:
@@ -37,7 +37,7 @@ def listar_usuarios():
         return usuarios
         
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao listar usuários: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao listar usuários: {e}")
         return []
         
     finally:
@@ -65,7 +65,7 @@ def inserir_cliente(cpf, nome, data_nascimento=None, email=None, ddd=None, telef
         return True
 
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao inserir cliente: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao inserir cliente: {e}")
         return False
 
     finally:
@@ -86,7 +86,7 @@ def listar_clientes():
         return clientes
         
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao listar clientes: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao listar clientes: {e}")
         return []
         
     finally:
@@ -119,7 +119,7 @@ def inserir_produto(ref, sku, descricao, tam, bipe, valor, caminho_imagem=None):
         return True
 
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao inserir produto: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao inserir produto: {e}")
         return False
 
     finally:
@@ -139,7 +139,7 @@ def listar_produtos():
         return produtos
         
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao listar produtos: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao listar produtos: {e}")
         return []
         
     finally:
@@ -160,7 +160,7 @@ def buscar_cliente_por_cpf(cpf):
         return cliente
         
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao buscar cliente: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao buscar cliente: {e}")
         return None
         
     finally:
@@ -184,7 +184,7 @@ def atualizar_cliente(cpf, nome, data_nascimento, ddd, telefone):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao atualizar cliente: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao atualizar cliente: {e}")
         return False
     finally:
         if conn and conn.is_connected():
@@ -201,7 +201,7 @@ def buscar_produto_por_sku(sku):
         produto = cursor.fetchone()
         return produto
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao buscar produto: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao buscar produto: {e}")
         return None
     finally:
         if conn and conn.is_connected():
@@ -259,7 +259,7 @@ def salvar_venda_completa(dados_venda):
     except Exception as e:
         if conn:
             conn.rollback()
-        messagebox.showerror("Erro de BD", f"Falha ao salvar a venda: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao salvar a venda: {e}")
         return False
     finally:
         if conn and conn.is_connected():
@@ -279,7 +279,7 @@ def listar_produto_especifico(pro_sku):
         return produto
         
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao listar produtos: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao listar produtos: {e}")
         return []
         
     finally:
@@ -374,7 +374,7 @@ def buscar_vendas_para_relatorio(vendedor=None, data_inicio=None, data_fim=None)
         return vendas
 
     except Exception as e:
-        messagebox.showerror("Erro de Banco de Dados", f"Falha ao buscar relatório de vendas: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao buscar relatório de vendas: {e}")
         return []
         
     finally:
@@ -421,7 +421,7 @@ def criar_novo_inventario(lista_produtos_do_arquivo):
 
     except Exception as e:
         if conn: conn.rollback()
-        messagebox.showerror("Erro de BD", f"Falha ao criar novo inventário: {e}")
+        messagebox.showerror("na comunicação de dados", f"Falha ao criar novo inventário: {e}")
         return None
     finally:
         if conn and conn.is_connected():
@@ -467,7 +467,7 @@ def atualizar_contagem_item(id_inventario, sku_produto, nova_quantidade):
             return False
 
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao atualizar contagem: {e}")
+        messagebox.showerror("na comunicação de dados", f"Falha ao atualizar contagem: {e}")
         return False
     finally:
         if conn and conn.is_connected():
@@ -485,7 +485,7 @@ def finalizar_inventario_db(id_inventario):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao finalizar inventário: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao finalizar inventário: {e}")
         return False
     finally:
         if conn and conn.is_connected():
@@ -503,7 +503,7 @@ def cancelar_inventario_db(id_inventario):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao cancelar inventário: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao cancelar inventário: {e}")
         return False
     finally:
         if conn and conn.is_connected():
@@ -549,7 +549,7 @@ def buscar_inventario_em_andamento():
         }
 
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao buscar inventário em andamento: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao buscar inventário em andamento: {e}")
         return None
     finally:
         if conn and conn.is_connected():
@@ -581,7 +581,7 @@ def listar_inventarios_finalizados(data_inicio=None, data_fim=None):
         return inventarios
 
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao listar inventários finalizados: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao listar inventários finalizados: {e}")
         return []
     finally:
         if conn and conn.is_connected():
@@ -613,7 +613,7 @@ def buscar_detalhes_inventario(inv_id):
         return itens
 
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao buscar detalhes do inventário: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao buscar detalhes do inventário: {e}")
         return {}
     finally:
         if conn and conn.is_connected():
@@ -632,7 +632,7 @@ def adicionar_item_ao_inventario(id_inventario, sku_produto):
         produto = cursor.fetchone()
 
         if not produto:
-            messagebox.showerror("Erro Interno", f"Não foi possível encontrar o produto com SKU {sku_produto} para adicionar ao inventário.")
+            messagebox.showerror("Erro na comunicação de dados", f"Não foi possível encontrar o produto com SKU {sku_produto} para adicionar ao inventário.")
             return False
 
         pro_id, ref, desc, tam, valor = produto
@@ -648,7 +648,7 @@ def adicionar_item_ao_inventario(id_inventario, sku_produto):
         return True
 
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao adicionar item ao inventário: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao adicionar item ao inventário: {e}")
         return False
     finally:
         if conn and conn.is_connected():
@@ -676,7 +676,7 @@ def buscar_produto_por_sku_ou_bipe(codigo):
         produto = cursor.fetchone()
         return produto
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao buscar produto por código: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao buscar produto por código: {e}")
         return None
     finally:
         if conn and conn.is_connected():
@@ -694,7 +694,7 @@ def atualizar_caminho_imagem_produto(ref_produto, caminho_imagem):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao atualizar caminho da imagem: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao atualizar caminho da imagem: {e}")
         return False
     finally:
         if conn and conn.is_connected():
@@ -740,7 +740,7 @@ def decrementar_estoque_item_inventario(id_inventario, sku_produto):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao decrementar estoque do item: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao decrementar estoque do item: {e}")
         return False
     finally:
         if conn and conn.is_connected():
@@ -786,7 +786,7 @@ def incrementar_estoque_item_inventario(id_inventario, sku_produto):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Erro de BD", f"Falha ao incrementar estoque do item: {e}")
+        messagebox.showerror("Erro na comunicação de dados", f"Falha ao incrementar estoque do item: {e}")
         return False
     finally:
         if conn and conn.is_connected():

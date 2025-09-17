@@ -832,7 +832,7 @@ class TelaPontoVenda:
             self.atualizar_total()
             self.produto_var.set("")
         else:
-            messagebox.showerror("Erro", f"Produto com SKU '{sku_devolvido}' não encontrado no banco de dados.", parent=self.janela_pdv)
+            messagebox.showerror("Erro", f"Produto com SKU '{sku_devolvido}' não encontrado.", parent=self.janela_pdv)
 
     def obter_valor_restante(self):
         try:
@@ -1158,7 +1158,7 @@ class TelaPontoVenda:
             self.tela_resumo_venda()
         else:
             # Se a função do CRUD retornar False, significa que houve um erro
-            messagebox.showerror("Falha", "Não foi possível salvar a venda no banco de dados. Verifique o console para mais detalhes.")
+            messagebox.showerror("Falha", "Não foi possível salvar a venda. Tente novamente.")
     
     def tela_resumo_venda(self):
         self.limpar_frame()

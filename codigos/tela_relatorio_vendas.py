@@ -166,7 +166,7 @@ class TelaRelatorioVendas:
         titulo_filtro = f"Vendedor: {vendedor_selecionado} | Período: {data_inicio} a {data_fim}"
 
         if not dados_para_pdf:
-            messagebox.showwarning("Atenção", "Nenhuma venda para gerar no relatório.", parent=self.janela_relatorio)
+            messagebox.showwarning("Atenção", "Nenhuma venda encontrada para o relatório.", parent=self.janela_relatorio)
             return
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -224,4 +224,4 @@ class TelaRelatorioVendas:
             messagebox.showinfo("Sucesso", f"Relatório gerado com sucesso!\nSalvo como: {nome_arquivo}", parent=self.janela_relatorio)
 
         except Exception as e:
-            messagebox.showerror("Erro", f"Ocorreu um erro ao gerar o PDF: {e}", parent=self.janela_relatorio)
+            messagebox.showerror("Erro", f"Ocorreu um erro ao gerar o PDF: {e}.\nTente novamente.", parent=self.janela_relatorio)

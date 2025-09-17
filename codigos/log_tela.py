@@ -82,7 +82,7 @@ class Tela:
                     self.mapa_imagens[pro_ref] = pro_caminho_imagem
                 print(f"Mapa de imagens carregado com {len(self.mapa_imagens)} item(s).")
         except Exception as e:
-            messagebox.showerror("Erro de Banco de Dados", f"Não foi possível carregar as imagens dos produtos: {e}")
+            messagebox.showerror("Erro ao carregar a imagem", f"Não foi possível carregar as imagens dos produtos: {e}")
         finally:
             if 'conn' in locals() and conn.is_connected():
                 cursor.close()
@@ -496,7 +496,7 @@ class Tela:
                 messagebox.showinfo("Sucesso", f"'{produto_encontrado['pro_descricao']}' adicionado ao inventário.", parent=top)
                 top.destroy()
             else:
-                messagebox.showinfo("Produto Não Encontrado", "Código não existe. Preencha os dados manualmente para cadastrar um novo produto.", parent=top)
+                messagebox.showinfo("Produto Não Encontrado", "Código não existe! Preencha os dados manualmente para cadastrar um novo produto.", parent=top)
                 manual_frame.pack(fill='x', expand=True, padx=10, pady=10)
                 entry_sku.config(state='disabled')
                 btn_buscar.config(state='disabled')
@@ -542,7 +542,7 @@ class Tela:
                     if caminho_imagem_db:
                         self.mapa_imagens[ref] = caminho_imagem_db
 
-                    msg_sucesso = f"'{desc}' cadastrado com sucesso no banco de dados."
+                    msg_sucesso = f"'{desc}' cadastrado com sucesso!"
 
                     if self.inventario_iniciado:
                         self.novo_item_contador += 1
@@ -776,7 +776,7 @@ class Tela:
         # 3. Age de acordo com a decisão do usuário
         if decisao_usuario == "finalizar":
             if crud.finalizar_inventario_db(self.id_inventario_ativo):
-                messagebox.showinfo("Sucesso", "Inventário finalizado e salvo no banco de dados.", parent=self.janela)
+                messagebox.showinfo("Sucesso", "Inventário finalizado e salvo no histórico de inventários.", parent=self.janela)
                 # Reseta a interface após o sucesso
                 self.dados_originais.clear()
                 self.inventario_iniciado = False
