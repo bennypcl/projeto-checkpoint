@@ -407,7 +407,7 @@ class Tela:
                         ref, desc, tam, quant_str, valor_str = campos[:5]
 
                         # 4. Busca o SKU no mapa
-                        sku = sku_map.get((ref, tam), 'N/A') # Retorna 'N/A' se a combinação não for encontrada
+                        sku = sku_map.get((ref, tam), 'N/A') # Retorna 'N/A' se a combinação não for encontrada aaaaaaaaaaaaaaaaaaaa
                         
                         quant = int(quant_str)
                         valor = float(valor_str.replace(',', '.')) if valor_str.strip() else 0.0
