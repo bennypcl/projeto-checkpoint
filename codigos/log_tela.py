@@ -380,8 +380,6 @@ class Tela:
         
         ttk.Button(self.frm_principal_relDivergencia, text="Gerar Relatório PDF", command=self._gerar_e_finalizar_relatorio).pack(pady=(20, 0))
 
-    # Em log_tela.py
-
     def upp_arquivo(self):
         caminho_arquivo = filedialog.askopenfilename(title="Selecione o Arquivo de Inventário (.txt)", filetypes=[("Arquivos de texto", "*.txt")])
         if not caminho_arquivo: return
@@ -390,13 +388,11 @@ class Tela:
         self.inventario_iniciado = False
 
         try:
-            # --- LÓGICA MODIFICADA (Parte 1) ---
-            # 1. Pega todos os produtos do banco de dados ANTES de ler o arquivo.
+            # Pega todos os produtos do banco de dados ANTES de ler o arquivo.
             produtos_do_banco = crud.listar_produtos()
             
-            # 2. Cria um mapa de consulta para acesso rápido. A chave é uma tupla (ref, tam).
+            # Mapa de consulta para acesso rápido. Chave: (ref, tam).
             sku_map = {(p['pro_ref'], p['pro_tam']): p['pro_sku'] for p in produtos_do_banco if p['pro_ref'] and p['pro_tam']}
-            # --- FIM DA MODIFICAÇÃO (Parte 1) ---
 
             with open(caminho_arquivo, "r", encoding="utf-8") as f:
                 for i, linha in enumerate(f):
@@ -406,14 +402,12 @@ class Tela:
                     try:
                         campos = [campo.strip() for campo in linha.split(';')]
                         
-                        # --- LÓGICA MODIFICADA (Parte 2) ---
-                        # 3. Ajusta a leitura para um arquivo SEM a coluna SKU.
+                        # Ajusta a leitura para um arquivo SEM a coluna SKU.
                         # Formato esperado no .txt: ref;desc;tam;quant;valor
                         ref, desc, tam, quant_str, valor_str = campos[:5]
 
-                        # 4. Busca o SKU no mapa que criamos.
+                        # 4. Busca o SKU no mapa
                         sku = sku_map.get((ref, tam), 'N/A') # Retorna 'N/A' se a combinação não for encontrada
-                        # --- FIM DA MODIFICAÇÃO (Parte 2) ---
                         
                         quant = int(quant_str)
                         valor = float(valor_str.replace(',', '.')) if valor_str.strip() else 0.0
