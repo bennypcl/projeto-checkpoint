@@ -230,3 +230,7 @@ SET
     pro_caminho_imagem = NULLIF(@pro_caminho_imagem, '');
 
 SELECT 'Importação de PRODUTOS finalizada.' AS status;
+
+INSERT INTO produtos (pro_ref, pro_sku, pro_descricao, pro_tam, pro_bipe, pro_valor, pro_caminho_imagem) VALUES 
+('99002', '90002', 'KIT POSTERS PDV', 'UNI', '9900000000002', 0.00, 'imagens_produtos/99002.jpg'),
+('99003', '90003', 'CAIXA VITRINE PDV', 'UNI', '9900000000003', 0.00, 'imagens_produtos/99003.jpg');
