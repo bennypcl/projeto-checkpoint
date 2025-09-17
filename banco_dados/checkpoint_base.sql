@@ -230,5 +230,3 @@ SET
     pro_caminho_imagem = NULLIF(@pro_caminho_imagem, '');
 
 SELECT 'Importação de PRODUTOS finalizada.' AS status;
-
-
