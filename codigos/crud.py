@@ -1,7 +1,7 @@
 from conexao import conectar
 from tkinter import messagebox
 
-# ====================== USUÁRIOS ======================
+# USUÁRIOS 
 
 def inserir_usuario(cargo, nome, cpf):
     """Insere um novo usuário na tabela 'usuarios'."""
@@ -45,7 +45,7 @@ def listar_usuarios():
             cursor.close()
             conn.close()
 
-# ====================== CLIENTES ======================
+# CLIENTES 
 
 def inserir_cliente(cpf, nome, data_nascimento=None, email=None, ddd=None, telefone=None, cep=None, rua=None, bairro=None, numero=None, complemento=None, uf=None, cidade=None):
     """Insere um novo cliente na tabela 'clientes'."""
@@ -94,7 +94,7 @@ def listar_clientes():
             cursor.close()
             conn.close()
 
-# ====================== PRODUTOS ======================
+# PRODUTOS 
 
 def inserir_produto(ref, sku, descricao, tam, bipe, valor, caminho_imagem=None):
     """Insere um novo produto na tabela 'produtos' com a nova estrutura."""
@@ -154,9 +154,8 @@ def buscar_cliente_por_cpf(cpf):
         if not conn: return None
         
         cursor = conn.cursor(dictionary=True)
-        # Usamos %s para evitar SQL Injection
         cursor.execute("SELECT * FROM clientes WHERE cli_cpf = %s", (cpf,))
-        cliente = cursor.fetchone() # fetchone() pega apenas um resultado
+        cliente = cursor.fetchone() # fetchone() pega só um resultado
         return cliente
         
     except Exception as e:
@@ -216,7 +215,7 @@ def salvar_venda_completa(dados_venda):
         cursor = conn.cursor()
         conn.start_transaction()
 
-        # 1. Insere na tabela PEDIDOS (com a nova coluna de desconto)
+        # insere na tabela PEDIDOS
         cli_id = dados_venda['cliente'].get('id')
         usu_id = dados_venda['vendedor_id']
         desconto_info = dados_venda.get('desconto', '') # Pega a info do desconto
@@ -225,13 +224,13 @@ def salvar_venda_completa(dados_venda):
         cursor.execute(sql_pedido, (cli_id, dados_venda['total'], usu_id, desconto_info))
         id_do_pedido = cursor.lastrowid
 
-        # 2. Insere na tabela ITENS_PEDIDO
+        # insere na tabela ITENS_PEDIDO
         sql_itens = "INSERT INTO itens_pedido (ped_id, pro_id, item_quant, item_valor_unitario) VALUES (%s, %s, %s, %s)"
         for produto in dados_venda['produtos_obj']:
             valores_item = (id_do_pedido, produto['id'], 1, produto['preco'])
             cursor.execute(sql_itens, valores_item)
 
-        # 3. Insere na tabela PAGAMENTOS e nas tabelas de DETALHES
+        # insere na tabela PAGAMENTOS e nas tabelas de DETALHES
         for pag in dados_venda['pagamentos']:
             if pag['valor'] <= 0: continue
             sql_pagamento = "INSERT INTO pagamentos (ped_id, pag_metodo, pag_valor) VALUES (%s, %s, %s)"
@@ -296,7 +295,7 @@ def buscar_vendas_para_relatorio(vendedor=None, data_inicio=None, data_fim=None)
         
         cursor = conn.cursor(dictionary=True)
         
-        # --- LÓGICA DE FILTRO DINÂMICO ---
+        #  LÓGICA DE FILTRO DINÂMICO 
         params = []
         sql_base = """
             SELECT 
@@ -382,7 +381,7 @@ def buscar_vendas_para_relatorio(vendedor=None, data_inicio=None, data_fim=None)
             cursor.close()
             conn.close()
 
-# ====================== INVENTÁRIO ======================
+# INVENTÁRIO 
 
 def criar_novo_inventario(lista_produtos_do_arquivo):
     """Cria um novo registro de inventário e TODOS os seus itens, conhecidos ou não."""
@@ -409,11 +408,11 @@ def criar_novo_inventario(lista_produtos_do_arquivo):
             resultado_produto = cursor.fetchone()
             
             if resultado_produto:
-                # Se o produto existe, salva o pro_id e deixamos os campos de texto nulos
+                # Se o produto existe, salva o pro_id e deixa os campos de texto nulos
                 pro_id = resultado_produto[0]
                 cursor.execute(sql_item, (id_inventario_ativo, pro_id, quant, None, None, None, None, None))
             else:
-                # Se o produto NÃO existe, salva pro_id como NULL e guardamos os dados do arquivo
+                # Se o produto NÃO existe, salva pro_id como NULL e guarda os dados do arquivo
                 cursor.execute(sql_item, (id_inventario_ativo, None, quant, ref, sku, desc, tam, valor))
 
         conn.commit()
@@ -627,7 +626,7 @@ def adicionar_item_ao_inventario(id_inventario, sku_produto):
         if not conn: return False
         cursor = conn.cursor()
 
-        # Primeiro, busca o pro_id do produto, que já deve existir na tabela 'produtos'
+        # Primeiro busca o pro_id do produto que já deve existir na tabela 'produtos'
         cursor.execute("SELECT pro_id, pro_ref, pro_descricao, pro_tam, pro_valor FROM produtos WHERE pro_sku = %s", (sku_produto,))
         produto = cursor.fetchone()
 
@@ -637,7 +636,7 @@ def adicionar_item_ao_inventario(id_inventario, sku_produto):
 
         pro_id, ref, desc, tam, valor = produto
 
-        # Adiciona o item ao inventário com quantidade de sistema 0, pois não estava no arquivo original
+        # Adiciona o item ao inventário com quantidade de sistema 0
         sql_item = """
             INSERT INTO inventario_itens
             (inv_id, pro_id, quantidade_sistema, item_ref, item_sku, item_descricao, item_tam, item_valor)
@@ -670,7 +669,7 @@ def buscar_produto_por_sku_ou_bipe(codigo):
         # A query agora busca em duas colunas
         sql = "SELECT * FROM produtos WHERE pro_sku = %s OR pro_bipe = %s"
         
-        # Passamos o mesmo código para os dois parâmetros
+        # Passa o mesmo código para os dois parâmetros
         cursor.execute(sql, (codigo, codigo))
         
         produto = cursor.fetchone()
@@ -716,7 +715,7 @@ def decrementar_estoque_item_inventario(id_inventario, sku_produto):
         resultado_produto = cursor.fetchone()
 
         if resultado_produto:
-            # Se o produto é CONHECIDO, atualiza usando o pro_id
+            # Se o produto é conhecido, atualiza usando o pro_id
             pro_id = resultado_produto[0]
             sql = """
                 UPDATE inventario_itens
@@ -727,7 +726,7 @@ def decrementar_estoque_item_inventario(id_inventario, sku_produto):
             """
             cursor.execute(sql, (id_inventario, pro_id))
         else:
-            # Se o produto é DESCONHECIDO, atualiza usando o item_sku
+            # Se o produto é desconhecido, atualiza usando o item_sku
             sql = """
                 UPDATE inventario_itens
                 SET

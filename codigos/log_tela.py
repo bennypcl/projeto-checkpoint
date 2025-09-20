@@ -28,6 +28,7 @@ class Tela:
         self._is_formatting = False
         self.user_var = tk.StringVar()
         self.senha_var = tk.StringVar()
+        self.itens_pendentes_cadastro = []
 
         self.log = ttk.Frame(self.janela, width=200, height=300)
         self.log.place(relx=0.5, rely=0.5, anchor="center")
@@ -89,7 +90,6 @@ class Tela:
                 conn.close()
 
     def _formatar_para_maiusculo(self, string_var, *args):
-        # O *args permite que a função receba argumentos extras (como o 'event' ou o 'entry_widget') e simplesmente os ignore.
         if self._is_formatting:
             return
         self._is_formatting = True
@@ -104,7 +104,6 @@ class Tela:
         usuario = self.user_var.get()
         senha = self.senha_var.get()
 
-        # Como os campos já forçam para maiúsculo, a verificação fica simples
         if usuario == "ADM" and senha == "ADM":
             self.carregar_mapa_de_imagens()
             self.menu()
@@ -226,24 +225,21 @@ class Tela:
         self.filtrar_treeview(None)
     
     def abrir_tela_relatorio(self, inventario_id=None):
-        # Se nenhum ID for passado, usa o inventário ativo. Se for passado, usa o histórico.
+        # Se não tiver o id, usa o inventário . Se for tiver, usa o histórico.
         dados_para_relatorio = []
         if inventario_id:
-            # Busca os detalhes de um inventário histórico
             dados_para_relatorio = crud.buscar_detalhes_inventario(inventario_id)
         else:
-            # Usa os dados do inventário atualmente carregado na tela principal
             if not self.dados_originais:
                 messagebox.showwarning("Sem Dados", "Nenhum inventário ativo carregado para gerar o relatório.")
                 return
-            # Converte o formato de self.dados_originais para o formato esperado
             for item in self.dados_originais:
                 dados_para_relatorio.append({
                     "ref": item[1], "sku": item[2], "desc": item[3], "tam": item[4], 
                     "est": item[5], "est_real": item[7]
                 })
 
-        self.tela_relatorio(dados_para_relatorio) # Chama a função que constrói a tela
+        self.tela_relatorio(dados_para_relatorio) 
 
     def mostrar_imagem_selecionada(self, event=None):
         selecionado = self.tvw_inventario.selection()
@@ -282,20 +278,14 @@ class Tela:
         Chama a geração do PDF, exibe uma mensagem de sucesso
         e fecha a janela de relatório.
         """
-        # 1. Verifica se há dados para gerar o relatório
+        # verifica se há dados para gerar o relatório
         if not self.divergencias and not self.negativados and not self.pdvs:
             messagebox.showwarning("Sem Dados", "Não há dados para gerar o relatório.", parent=self.tpl_relatorios)
             return
 
         try:
-            # 2. Chama a função que gera o PDF e captura o nome do arquivo
-            # self.relatorio é o seu gerar_relatorio_pdf
             nome_arquivo = self.relatorio(self.divergencias, self.negativados, self.pdvs, self.zerados)
-
-            # 3. Exibe a mensagem de sucesso
             messagebox.showinfo("Sucesso", f"Relatório salvo com sucesso como:\n{nome_arquivo}")
-
-            # 4. Fecha a janela de relatório
             self.tpl_relatorios.destroy()
 
         except Exception as e:
@@ -386,14 +376,14 @@ class Tela:
 
         self.dados_originais.clear()
         self.inventario_iniciado = False
-
+        self.itens_pendentes_cadastro.clear() # Limpa a lista de pendentes
+        
         try:
-            # Pega todos os produtos do banco de dados ANTES de ler o arquivo.
             produtos_do_banco = crud.listar_produtos()
-            
-            # Mapa de consulta para acesso rápido. Chave: (ref, tam).
             sku_map = {(p['pro_ref'], p['pro_tam']): p['pro_sku'] for p in produtos_do_banco if p['pro_ref'] and p['pro_tam']}
-
+            
+            dados_validados = []
+            
             with open(caminho_arquivo, "r", encoding="utf-8") as f:
                 for i, linha in enumerate(f):
                     linha = linha.strip()
@@ -401,48 +391,43 @@ class Tela:
                     
                     try:
                         campos = [campo.strip() for campo in linha.split(';')]
-                        
-                        # Ajusta a leitura para um arquivo SEM a coluna SKU.
-                        # Formato esperado no .txt: ref;desc;tam;quant;valor
                         ref, desc, tam, quant_str, valor_str = campos[:5]
+                        sku = sku_map.get((ref, tam))
 
-                        # 4. Busca o SKU no mapa
-                        sku = sku_map.get((ref, tam), 'N/A') # Retorna 'N/A' se a combinação não for encontrada aaaaaaaaaaaaaaaaaaaa
-                        
-                        quant = int(quant_str)
-                        valor = float(valor_str.replace(',', '.')) if valor_str.strip() else 0.0
-                        
-                        iid = f"file_{i}"
-                        # A lista self.dados_originais continua com a mesma estrutura, agora com o SKU buscado
-                        self.dados_originais.append([iid, ref, sku, desc, tam, quant, valor, ""])
+                        item_data = {
+                            'ref': ref, 'sku': sku, 'desc': desc, 'tam': tam, 
+                            'quant': int(quant_str), 'valor': float(valor_str.replace(',', '.'))
+                        }
 
+                        if sku: # Se o produto JÁ EXISTE no banco
+                            iid = f"file_{i}"
+                            dados_validados.append([iid, item_data['ref'], item_data['sku'], item_data['desc'], 
+                                                    item_data['tam'], item_data['quant'], item_data['valor'], ""])
+                        else: # Se o produto NÃO EXISTE
+                            self.itens_pendentes_cadastro.append(item_data)
                     except (ValueError, IndexError):
                         print(f"AVISO: Linha {i+1} ignorada - formato inválido: {linha}")
                         continue
             
-            if not self.dados_originais:
-                messagebox.showerror("Arquivo Inválido", "O arquivo selecionado está vazio ou não contém nenhuma linha com formato válido.", parent=self.janela)
-                self.inventario_iniciado = False
-                self._atualizar_estado_botoes_inventario()
+            if not dados_validados and not self.itens_pendentes_cadastro:
+                messagebox.showerror("Nenhum Item", "O arquivo está vazio ou não contém itens.", parent=self.janela)
                 return
 
-            self.id_inventario_ativo = crud.criar_novo_inventario(self.dados_originais)
+            self.id_inventario_ativo = crud.criar_novo_inventario(dados_validados)
             
             if self.id_inventario_ativo:
+                self.dados_originais = dados_validados
                 self.inventario_iniciado = True
-                self.inventario_modificado = False
-                self.filtrar_treeview(None)
-                self._atualizar_estado_botoes_inventario()
-            else:
-                self.dados_originais.clear()
-                self.inventario_iniciado = False
                 self.filtrar_treeview(None)
                 self._atualizar_estado_botoes_inventario()
 
+                if self.itens_pendentes_cadastro:
+                    self._abrir_janela_cadastro_pendentes()
+            else:
+                messagebox.showerror("Erro Crítico", "Não foi possível criar a sessão de inventário.", parent=self.janela)
+
         except Exception as e:
-            self.inventario_iniciado = False
-            self._atualizar_estado_botoes_inventario()
-            messagebox.showerror("Erro de Leitura", f"Não foi possível ler o arquivo:\n{e}")
+            messagebox.showerror("Erro de Leitura", f"Não foi possível processar o arquivo: {e}")
 
     def adicionar_produto(self):
         top = Toplevel(self.janela)
@@ -523,9 +508,7 @@ class Tela:
                     caminho_destino_abs = os.path.join(script_dir, caminho_relativo_db)
 
                     os.makedirs(os.path.dirname(caminho_destino_abs), exist_ok=True)
-                    shutil.copy(caminho_origem, caminho_destino_abs) # Tenta copiar o arquivo
-
-                    # Se a cópia deu certo, define a variável para salvar no banco
+                    shutil.copy(caminho_origem, caminho_destino_abs) 
                     caminho_imagem_db = caminho_relativo_db
 
                 # Bloco de Inserção no Banco
@@ -644,9 +627,7 @@ class Tela:
             
             if mostrar and pesquisa_ok:
                 iid, ref, sku, desc, tam, quant, valor, est_real = item_data
-
                 tags_aplicar = []
-                
                 # Condições de estado da contagem
                 is_divergente = False
                 is_igual = False
@@ -748,30 +729,32 @@ class Tela:
                 self.tvw_inventario.selection_set(iid_do_item)
                 self.tvw_inventario.see(iid_do_item)
         else:
-            # Este caso é raro, mas pode acontecer se o produto existe no DB mas não no arquivo .txt
             messagebox.showwarning("Não encontrado", f"O produto '{sku_a_contar}' existe, mas não faz parte deste inventário.")
             self.ent_ad_contagem.delete(0, "end")
 
     def finalizar_inventario(self):
+        # VERIFICAÇÃO DE ITENS PENDENTES DE CADASTRO
+        if self.itens_pendentes_cadastro:
+            messagebox.showwarning("Cadastro Pendente", 
+                                   f"Existem {len(self.itens_pendentes_cadastro)} produto(s) que não foram cadastrados na base de dados.\n\n"
+                                   "É necessário cadastrá-los antes de finalizar o inventário.", 
+                                   parent=self.janela)
+            self._abrir_janela_cadastro_pendentes()
+            return # Impede a continuação da finalização
+
         if not self.inventario_iniciado:
             return
         
-        # A verificação de 'modificado' foi REMOVIDA daqui.
-
-        # 1. Verifica se há itens com contagem pendente
         itens_pendentes = [item for item in self.dados_originais if str(item[7]).strip() == ""]
         
         decisao_usuario = "finalizar"
         
         if itens_pendentes:
-            # 2. Se houver, chama o novo diálogo
             decisao_usuario = self._dialogo_inventario_incompleto(len(itens_pendentes))
 
-        # 3. Age de acordo com a decisão do usuário
         if decisao_usuario == "finalizar":
             if crud.finalizar_inventario_db(self.id_inventario_ativo):
                 messagebox.showinfo("Sucesso", "Inventário finalizado e salvo no histórico de inventários.", parent=self.janela)
-                # Reseta a interface após o sucesso
                 self.dados_originais.clear()
                 self.inventario_iniciado = False
                 self.inventario_modificado = False
@@ -780,19 +763,16 @@ class Tela:
                 self._atualizar_estado_botoes_inventario()
         
         elif decisao_usuario == "ver_pendentes":
-            # Aplica o filtro para mostrar apenas os itens não contados
             self.filtrar_treeview(("est_real", "vazio"))
-        
-        # Se a decisão for "cancelar" ou None, não faz nada.
 
     def _atualizar_estado_botoes_inventario(self):
         if self.inventario_iniciado:
-            # Se um inventário está ATIVO, desabilita o Carregar e habilita os outros
+            # Se tem inventário ativo, desabilita o Carregar e habilita os outros
             self.btn_ad_arquivo.config(state="disabled")
             self.btn_finalizar_inventario.config(state="normal")
             self.btn_cancelar_inventario.config(state="normal")
         else:
-            # Se NÃO HÁ inventário, habilita o Carregar e desabilita os outros
+            # Se não tem inventário, habilita o Carregar e desabilita os outros
             self.btn_ad_arquivo.config(state="normal")
             self.btn_finalizar_inventario.config(state="disabled")
             self.btn_cancelar_inventario.config(state="disabled")
@@ -814,7 +794,7 @@ class Tela:
                 self.dados_originais.clear()
                 self.inventario_iniciado = False
                 self.inventario_modificado = False
-                self.id_inventario_ativo = None # Limpa o ID do inventário ativo
+                self.id_inventario_ativo = None 
                 self.filtrar_treeview(None)
                 self._atualizar_estado_botoes_inventario()
 
@@ -837,14 +817,10 @@ class Tela:
                     item['pro_tam'],
                     item['quantidade_sistema'],
                     item['pro_valor'],
-                    # Pega a quantidade contada do banco. Se for nula, usa um texto vazio.
                     item['quantidade_contada'] if item['quantidade_contada'] is not None else ""
                 ])
             
-            # Verifica se alguma contagem já foi feita para definir o status 'modificado'
             self.inventario_modificado = any(item['quantidade_contada'] is not None for item in dados_inventario['itens'])
-
-            # Atualiza a interface gráfica
             self.filtrar_treeview(None)
             self._atualizar_estado_botoes_inventario()
 
@@ -855,14 +831,12 @@ class Tela:
         #top.transient(self.janela)
         top.grab_set()
 
-        # --- 1. CRIAÇÃO DOS FRAMES PRINCIPAIS (sem .pack() ainda) ---
         frame_filtros = ttk.LabelFrame(top, text="Filtrar por Data de Finalização", padding=10)
         frame_lista = ttk.Frame(top)
         frame_acoes = ttk.Frame(top, padding=(10, 10, 10, 10))
 
-        # --- 2. MONTAGEM DO CONTEÚDO DE CADA FRAME ---
-
-        # --- Conteúdo do Frame de Filtros (Topo) ---
+        # Filtros
+        
         ttk.Label(frame_filtros, text="De:").pack(side=LEFT, padx=(0, 5))
         date_inicio = ttk.DateEntry(frame_filtros, bootstyle=PRIMARY, dateformat="%d/%m/%Y")
         date_inicio.pack(side=LEFT, padx=(0, 10))
@@ -886,7 +860,7 @@ class Tela:
         btn_buscar = ttk.Button(frame_filtros, text="Buscar", command=_buscar_e_popular, bootstyle=PRIMARY)
         btn_buscar.pack(side=LEFT)
 
-        # --- Conteúdo do Frame da Lista (Meio) ---
+        # frame da lista
         colunas = ("nome", "inicio", "fim")
         tree = ttk.Treeview(frame_lista, columns=colunas, show="headings", selectmode="extended")
         tree.heading("nome", text="Nome"); tree.column("nome", width=300)
@@ -895,8 +869,6 @@ class Tela:
         
         scrollbar = ttk.Scrollbar(frame_lista, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
-        
-        # Usa .pack() aqui para os itens DENTRO do frame_lista
         scrollbar.pack(side=RIGHT, fill=Y)
         tree.pack(fill=BOTH, expand=True, side=LEFT)
 
@@ -909,7 +881,7 @@ class Tela:
 
         tree.bind("<Double-1>", _abrir_relatorio_selecionado)
 
-        # --- Conteúdo do Frame de Ações (Baixo) ---
+        # Frame de ação
         def _apagar_inventario_selecionado():
             selecionados = tree.selection()
             if not selecionados:
@@ -930,7 +902,7 @@ class Tela:
         btn_apagar = ttk.Button(frame_acoes, text="Apagar Inventário(s) Selecionado(s)", command=_apagar_inventario_selecionado, bootstyle=DANGER)
         btn_apagar.pack(side=RIGHT) # Empacota o botão DENTRO do frame_acoes
 
-        # --- 3. EMPACOTAMENTO FINAL DOS FRAMES PRINCIPAIS NA JANELA ---
+        # Junta os frames principais
         frame_filtros.pack(fill=X, padx=10, pady=(10,0))
         frame_acoes.pack(fill=X, side=BOTTOM, padx=10, pady=(0,10))
         frame_lista.pack(fill=BOTH, expand=True, padx=10, pady=10)
@@ -953,7 +925,7 @@ class Tela:
         dialog.transient(self.janela)
         dialog.grab_set()
 
-        # --- BLOCO DE CÓDIGO PARA CENTRALIZAR A JANELA ---
+        # centraliza a janela
         dialog.update_idletasks() 
 
         main_x = self.janela.winfo_x()
@@ -968,7 +940,6 @@ class Tela:
         pos_y = main_y + (main_height // 2) - (dialog_height // 2)
         
         dialog.geometry(f"+{pos_x}+{pos_y}")
-        # --- FIM DO BLOCO DE CENTRALIZAÇÃO ---
 
         main_frame = ttk.Frame(dialog, padding=20)
         main_frame.pack(fill=BOTH, expand=True)
@@ -1025,12 +996,168 @@ class Tela:
                         self.dados_originais[i][5] += 1 # Atualiza Estoque na tela
                         est_real_str = str(self.dados_originais[i][7]).strip()
                         if est_real_str:
-                            self.dados_originais[i][7] = int(est_real_str) + 1 # Atualiza Est. Real na tela
+                            self.dados_originais[i][7] = int(est_real_str) + 1 
                     
                     break # Para o loop interno qnd achar o produto
         
         # Atualiza a tabela na tela para mostrar os novos valores
         self.filtrar_treeview(None)
+        
+    def _abrir_janela_cadastro_pendentes(self):
+        if not self.itens_pendentes_cadastro:
+            return
+
+        dialog = Toplevel(self.janela)
+        dialog.title("Itens Pendentes de Cadastro")
+        dialog.transient(self.janela)
+        dialog.grab_set()
+        dialog.geometry("600x650")
+
+        # --- Variáveis de Estado da Janela ---
+        estado = {
+            "indice_atual": 0,
+            "total_itens": len(self.itens_pendentes_cadastro),
+            "inseridos": 0,
+            "caminho_imagem": None
+        }
+
+        # --- StringVars para os campos do formulário ---
+        ref_var, sku_var, desc_var, tam_var, bipe_var, preco_var = StringVar(), StringVar(), StringVar(), StringVar(), StringVar(), StringVar()
+        caminho_imagem_var = StringVar(value="Nenhuma imagem selecionada.")
+
+        # --- Funções Internas da Janela ---
+        def atualizar_contador():
+            lbl_contador.config(text=f"{estado['inseridos']}/{estado['total_itens']} Inseridos")
+
+        def _validar_apenas_numeros(valor_digitado):
+            return valor_digitado.isdigit() or valor_digitado == ""
+
+        def mostrar_item_atual():
+            if not self.itens_pendentes_cadastro or estado['indice_atual'] >= len(self.itens_pendentes_cadastro):
+                messagebox.showinfo("Concluído", "Todos os itens pendentes foram processados.", parent=dialog)
+                dialog.destroy()
+                return
+
+            item_atual = self.itens_pendentes_cadastro[estado['indice_atual']]
+            
+            ref_var.set(item_atual.get('ref', ''))
+            sku_var.set(item_atual.get('sku') or '')
+            desc_var.set(item_atual.get('desc', ''))
+            tam_var.set(item_atual.get('tam', ''))
+            preco_var.set(str(item_atual.get('valor', '0.0')))
+            bipe_var.set('')
+            caminho_imagem_var.set("Nenhuma imagem selecionada.")
+            estado['caminho_imagem'] = None
+
+        def selecionar_imagem_pendente():
+            caminho = filedialog.askopenfilename(filetypes=[("Arquivos de Imagem", "*.png *.jpg *.jpeg")])
+            if caminho:
+                estado['caminho_imagem'] = caminho
+                caminho_imagem_var.set(os.path.basename(caminho))
+
+        def adicionar_item_atual():
+            ref = ref_var.get().strip()
+            sku = sku_var.get().strip()
+            desc = desc_var.get().strip()
+            tam = tam_var.get().strip()
+            bipe = bipe_var.get().strip()
+            preco_str = preco_var.get().strip()
+
+            if not all([ref, sku, desc, tam, bipe, preco_str]):
+                messagebox.showerror("Campos Obrigatórios", "Todos os campos com * devem ser preenchidos.", parent=dialog)
+                return
+            
+            if not sku.isdigit():
+                messagebox.showerror("Formato Inválido", "O campo SKU deve conter apenas números.", parent=dialog)
+                return
+
+            if not estado['caminho_imagem']:
+                messagebox.showerror("Imagem Obrigatória", "É obrigatório selecionar uma imagem para o produto.", parent=dialog)
+                return
+            
+            try:
+                float(preco_str.replace(',', '.'))
+            except ValueError:
+                messagebox.showerror("Formato Inválido", "O valor do campo 'Preço' não é um número válido.", parent=dialog)
+                return
+
+            resposta = messagebox.askyesno("Confirmar Ação", 
+                                           "Esta ação não pode ser desfeita. Deseja continuar e salvar o produto na base de dados?",
+                                           parent=dialog)
+            if not resposta:
+                return
+
+            try:
+                caminho_imagem_db = None
+                if estado['caminho_imagem']:
+                    _, extensao = os.path.splitext(estado['caminho_imagem'])
+                    novo_nome_arquivo = f"{ref}{extensao}"
+                    caminho_relativo_db = os.path.join("imagens_produtos", novo_nome_arquivo)
+                    caminho_destino_abs = os.path.join(os.path.dirname(__file__), caminho_relativo_db)
+                    os.makedirs(os.path.dirname(caminho_destino_abs), exist_ok=True)
+                    shutil.copy(estado['caminho_imagem'], caminho_destino_abs)
+                    caminho_imagem_db = caminho_relativo_db
+                
+                sucesso = crud.inserir_produto(ref, sku, desc, tam, bipe, preco_str, caminho_imagem_db)
+                
+                if sucesso:
+                    self.itens_pendentes_cadastro.pop(estado['indice_atual'])
+                    estado['inseridos'] += 1
+                    atualizar_contador()
+                    mostrar_item_atual()
+                
+            except Exception as e:
+                messagebox.showerror("Erro ao Salvar", f"Não foi possível salvar o produto: {e}", parent=dialog)
+        
+        main_frame = ttk.Frame(dialog, padding=15)
+        main_frame.pack(fill=BOTH, expand=True)
+        main_frame.columnconfigure(1, weight=1)
+
+        vcmd_numeros = (dialog.register(_validar_apenas_numeros), '%P')
+
+        ttk.Label(main_frame, text=f"{estado['total_itens']} produtos do arquivo não foram encontrados...", wraplength=550).grid(row=0, column=0, columnspan=2, pady=(0,5))
+        ttk.Label(main_frame, text="Deseja inseri-los agora ou depois? ...").grid(row=1, column=0, columnspan=2, pady=(0,15))
+        lbl_contador = ttk.Label(main_frame, text="", font="-weight bold")
+        lbl_contador.grid(row=2, column=0, columnspan=2, pady=(0,15))
+        
+        form_frame = ttk.LabelFrame(main_frame, text="Dados do Produto")
+        form_frame.grid(row=3, column=0, columnspan=2, sticky="ew")
+        form_frame.columnconfigure(1, weight=1)
+        
+        ttk.Label(form_frame, text="Referência*:").grid(row=0, column=0, sticky="e", padx=5, pady=4)
+        ttk.Entry(form_frame, textvariable=ref_var, state="readonly").grid(row=0, column=1, sticky="ew", padx=5)
+
+        ttk.Label(form_frame, text="Descrição*:").grid(row=1, column=0, sticky="e", padx=5, pady=4)
+        ttk.Entry(form_frame, textvariable=desc_var, state="readonly").grid(row=1, column=1, sticky="ew", padx=5)
+        
+        ttk.Label(form_frame, text="Tamanho*:").grid(row=2, column=0, sticky="e", padx=5, pady=4)
+        ttk.Entry(form_frame, textvariable=tam_var, state="readonly").grid(row=2, column=1, sticky="ew", padx=5)
+
+        ttk.Label(form_frame, text="Preço (R$)*:").grid(row=3, column=0, sticky="e", padx=5, pady=4)
+        ttk.Entry(form_frame, textvariable=preco_var).grid(row=3, column=1, sticky="ew", padx=5)
+
+        ttk.Label(form_frame, text="SKU*:").grid(row=4, column=0, sticky="e", padx=5, pady=4)
+        entry_sku = ttk.Entry(form_frame, textvariable=sku_var, validate='key', validatecommand=vcmd_numeros)
+        entry_sku.grid(row=4, column=1, sticky="ew", padx=5)
+
+        ttk.Label(form_frame, text="Bipe*:").grid(row=5, column=0, sticky="e", padx=5, pady=4)
+        entry_bipe = ttk.Entry(form_frame, textvariable=bipe_var, validate='key', validatecommand=vcmd_numeros)
+        entry_bipe.grid(row=5, column=1, sticky="ew", padx=5)
+        
+        ttk.Label(form_frame, text="Imagem*:").grid(row=6, column=0, sticky="e", padx=5, pady=4)
+        img_frame = ttk.Frame(form_frame)
+        img_frame.grid(row=6, column=1, sticky="ew", padx=5)
+        ttk.Button(img_frame, text="Carregar Imagem...", command=selecionar_imagem_pendente).pack(side=LEFT)
+        ttk.Label(img_frame, textvariable=caminho_imagem_var).pack(side=LEFT, padx=5)
+
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=(20,0))
+        
+        ttk.Button(btn_frame, text="Lembrar Depois", command=dialog.destroy, bootstyle=(SECONDARY, OUTLINE)).pack(side=LEFT, padx=10, ipady=5)
+        ttk.Button(btn_frame, text="Adicionar", command=adicionar_item_atual, bootstyle=PRIMARY).pack(side=RIGHT, padx=10, ipady=5)
+        
+        atualizar_contador()
+        mostrar_item_atual()
 
 if __name__ == "__main__":
     janela = ttk.Window(themename='united')

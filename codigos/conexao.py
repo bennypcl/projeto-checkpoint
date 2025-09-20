@@ -1,19 +1,18 @@
-# conexao.py
 import mysql.connector
 from mysql.connector import errorcode
 from tkinter import messagebox
 
 def conectar():
     """
-    Função para conectar ao banco de dados MySQL.
+    Função para conectar ao banco de dados.
     Retorna o objeto de conexão ou None em caso de falha.
     """
     try:
         conexao = mysql.connector.connect(
-            host='localhost',       # Ou o IP do seu servidor de banco de dados
-            user='root',     # Seu usuário do MySQL
-            password='root',   # Sua senha do MySQL
-            database='CHECKPOINT'   # O nome do banco de dados que você criou
+            host='localhost',       # ou o IP do servidor de banco de dados
+            user='root',     # usuário do MySQL
+            password='root',   # senha do MySQL
+            database='CHECKPOINT'   # nome do banco de dados
         )
         return conexao
     except mysql.connector.Error as err:

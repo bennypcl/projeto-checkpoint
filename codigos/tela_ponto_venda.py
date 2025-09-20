@@ -245,65 +245,96 @@ class TelaPontoVenda:
         ttk.Label(container, text="Cadastro do Cliente", font=("Arial", 16, "bold")).grid(
             row=1, column=0, columnspan=2, pady=(0, 15))
 
-        # Campo CPF
+        # --- Campos de CPF, Nome e Telefone ---
         ttk.Label(container, text="CPF:").grid(row=2, column=0, padx=5, pady=8, sticky="e")
         self.entry_cpf = ttk.Entry(container, width=30, textvariable=self.cpf_var)
         self.entry_cpf.grid(row=2, column=1, padx=5, pady=8)
         self.entry_cpf.focus_set()
         self.entry_cpf.bind("<FocusOut>", self._ao_sair_do_cpf)
-
-        # Ativa o trace para o CPF
         if not self._cpf_trace_set:
             self.cpf_var.trace_add('write', self.formatar_cpf)
             self._cpf_trace_set = True
 
-        # Campo Nome
         ttk.Label(container, text="Nome:").grid(row=3, column=0, padx=5, pady=8, sticky="e")
         self.entry_nome = ttk.Entry(container, width=30, textvariable=self.nome_var)
         self.entry_nome.grid(row=3, column=1, padx=5, pady=8)
-
-        # Ativa o trace para o Nome
         if not self._nome_trace_set:
             self.nome_var.trace_add('write', 
                 lambda *args: self._formatar_para_maiusculo(self.nome_var, self.entry_nome))
             self._nome_trace_set = True
 
-        # Campo Telefone
         ttk.Label(container, text="Telefone:").grid(row=4, column=0, padx=5, pady=8, sticky="e")
         self.entry_telefone = ttk.Entry(container, width=30, textvariable=self.telefone_var)
         self.entry_telefone.grid(row=4, column=1, padx=5, pady=8)
-
-        # Ativa o trace para o Telefone
         if not self._telefone_trace_set:
             self.telefone_var.trace_add('write', self.formatar_telefone)
             self._telefone_trace_set = True
 
-        # Campos de Data de Nascimento com Spinbox
+        # --- SEÇÃO DE DATA DE NASCIMENTO ---
+        import calendar 
+        
         ttk.Label(container, text="Data de Nascimento:").grid(row=5, column=0, padx=5, pady=8, sticky="e")
         
         frame_nascimento = ttk.Frame(container)
         frame_nascimento.grid(row=5, column=1, padx=5, pady=8, sticky="w")
         
-        # Registra a função de validação
+        hoje = datetime.now()
         vcmd = (self.janela_pdv.register(self._validar_dia_mes), '%P')
+        
+        _is_updating = [False] # Flag local para evitar loops de atualização
 
-        # Spinbox para o Dia, com validação e formatação
+        # Criação dos Spinboxes
         self.spin_dia = ttk.Spinbox(frame_nascimento, from_=1, to=31, width=4,
                                     validate='key', validatecommand=vcmd)
         self.spin_dia.pack(side="left", padx=(0, 5))
-        self.spin_dia.bind("<FocusOut>", lambda e: self._formatar_data_focus_out(e, 31))
-        
-        # Spinbox para o Mês, com validação e formatação
+
         self.spin_mes = ttk.Spinbox(frame_nascimento, from_=1, to=12, width=4,
                                     validate='key', validatecommand=vcmd)
         self.spin_mes.pack(side="left", padx=5)
-        self.spin_mes.bind("<FocusOut>", lambda e: self._formatar_data_focus_out(e, 12))
 
-        # Spinbox para o Ano
-        self.spin_ano = ttk.Spinbox(frame_nascimento, from_=1920, to=2024, width=6)
+        self.spin_ano = ttk.Spinbox(frame_nascimento, from_=1920, to=hoje.year, width=6)
         self.spin_ano.pack(side="left")
 
-        # Frame para os botões de ação
+        # Função local (definida APÓS os widgets serem criados)
+        def _atualizar_limites(*args):
+            if _is_updating[0]:
+                return
+            
+            _is_updating[0] = True
+            try:
+                ano_sel = int(self.spin_ano.get())
+                mes_sel = int(self.spin_mes.get())
+
+                # Limita o mês se o ano for o atual
+                max_mes = hoje.month if ano_sel == hoje.year else 12
+                self.spin_mes.config(to=max_mes)
+                if mes_sel > max_mes:
+                    self.spin_mes.set(f"{max_mes:02d}")
+                    mes_sel = max_mes
+                
+                # Limita o dia
+                ultimo_dia_mes = calendar.monthrange(ano_sel, mes_sel)[1]
+                max_dia = hoje.day if (ano_sel == hoje.year and mes_sel == hoje.month) else ultimo_dia_mes
+                self.spin_dia.config(to=max_dia)
+                if int(self.spin_dia.get()) > max_dia:
+                    self.spin_dia.set(f"{max_dia:02d}")
+
+            except (ValueError, TypeError):
+                pass
+            finally:
+                _is_updating[0] = False
+
+        # Vincula o comando APÓS a criação dos widgets e da função
+        self.spin_dia.config(command=_atualizar_limites)
+        self.spin_mes.config(command=_atualizar_limites)
+        self.spin_ano.config(command=_atualizar_limites)
+
+        # Define os valores iniciais como vazios
+        self.spin_dia.set("")
+        self.spin_mes.set("")
+        self.spin_ano.set("")
+
+        # Frame para os botões de ação 
         frame_botoes = ttk.Frame(container)
         frame_botoes.grid(row=6, column=0, columnspan=2, pady=(20, 0))
         btn_voltar = ttk.Button(frame_botoes, text="Voltar", command=self.voltar_do_cadastro_cliente, bootstyle=(SECONDARY, OUTLINE))
@@ -366,37 +397,63 @@ class TelaPontoVenda:
         return True
 
     def verificar_dados_cliente(self):
+        # 1. Coleta os dados de todos os campos
+        cpf = self.cpf_var.get().strip()
+        nome = self.nome_var.get().strip()
+        tel = self.telefone_var.get().strip()
+        dia_str = self.spin_dia.get().strip()
+        mes_str = self.spin_mes.get().strip()
+        ano_str = self.spin_ano.get().strip()
+
+        # 2. se qualquer campo for preenchido, TODOS os obrigatórios devem ser.
+        if any([cpf, nome, tel, dia_str, mes_str, ano_str]):
+            
+            # 2.1. Verifica se todos os campos obrigatórios foram preenchidos
+            if not all([cpf, nome, dia_str, mes_str, ano_str]):
+                messagebox.showerror("Campos Incompletos", 
+                                     "Para cadastrar um cliente, todos os campos (CPF, Nome e Data de Nascimento completa) devem ser preenchidos.", 
+                                     parent=self.janela_pdv)
+                return
+
+            # 2.2. Se todos foram preenchidos, valida o FORMATO e CONTEÚDO de cada um
+            if not self.validar_cpf(cpf):
+                messagebox.showerror("Erro de Validação", "O CPF informado é inválido.", parent=self.janela_pdv)
+                self.entry_cpf.focus_set()
+                return
+                
+            try:
+                data_nascimento = datetime(int(ano_str), int(mes_str), int(dia_str))
+                if data_nascimento.date() > datetime.now().date():
+                    messagebox.showerror("Data Inválida", "A data de nascimento не pode ser uma data futura.", parent=self.janela_pdv)
+                    return
+            except ValueError:
+                messagebox.showerror("Data Inválida", "A data de nascimento informada (ex: 31 de Fev) não é válida.", parent=self.janela_pdv)
+                return
+
+        # 3. Se as validações passaram (ou se todos os campos estavam vazios), o código continua
         cpf_numeros = "".join(filter(str.isdigit, self.cpf_var.get()))
-        nome = self.nome_var.get()
         tel_formatado = self.telefone_var.get()
         
-        # Extrai DDD e Telefone
         tel_numeros = "".join(filter(str.isdigit, tel_formatado))
         ddd = tel_numeros[:2] if len(tel_numeros) >= 2 else ""
         telefone = tel_numeros[2:] if len(tel_numeros) > 2 else ""
 
-        # Monta a data no formato do banco (YYYY-MM-DD)
         data_nasc_formatada = None
         if self.spin_dia.get() and self.spin_mes.get() and self.spin_ano.get():
             data_nasc_formatada = f"{self.spin_ano.get()}-{self.spin_mes.get()}-{self.spin_dia.get()}"
 
-        # Salva os dados na memória para usar na venda
         self.dados_cliente = {
             "cpf": cpf_numeros, "nome": nome, "telefone": tel_formatado, 
             "nascimento": f"{self.spin_dia.get()}/{self.spin_mes.get()}/{self.spin_ano.get()}" if data_nasc_formatada else ""
         }
 
-        # Lógica de salvar/atualizar no banco
-        if cpf_numeros and nome: # Só salva se tiver CPF e Nome
+        if cpf_numeros and nome:
             cliente_existente = buscar_cliente_por_cpf(cpf_numeros)
             if cliente_existente:
-                # Se existe, atualiza
                 atualizar_cliente(cpf_numeros, nome, data_nasc_formatada, ddd, telefone)
-                self.dados_cliente['id'] = cliente_existente['cli_id'] # Guarda o ID
+                self.dados_cliente['id'] = cliente_existente['cli_id']
             else:
-                # Se não existe, insere
                 inserir_cliente(cpf=cpf_numeros, nome=nome, data_nascimento=data_nasc_formatada, ddd=ddd, telefone=telefone)
-                # Idealmente, após inserir, você buscaria o cliente de novo para pegar o ID
                 novo_cliente = buscar_cliente_por_cpf(cpf_numeros)
                 if novo_cliente:
                     self.dados_cliente['id'] = novo_cliente['cli_id']
@@ -445,11 +502,7 @@ class TelaPontoVenda:
     def editar_cliente(self):
         """Prepara para editar/adicionar um cliente e navega para a tela de cadastro."""
         self._editando_cliente = True
-
-        # PASSO 1: Navega para a tela e CRIA os novos widgets
         self.tela_cadastro_cliente()
-
-        # PASSO 2: AGORA que os widgets da tela de cadastro já existem, nós os preenchemos
         if self.dados_cliente:
             # Preenche os campos de texto
             self.cpf_var.set(self.dados_cliente.get("cpf", ""))
@@ -477,12 +530,10 @@ class TelaPontoVenda:
 
     def _atualizar_estilo_botoes_modo(self):
         """Muda a aparência dos botões para indicar o modo ativo."""
-        # Define o estilo padrão (contorno) para todos
         self.btn_adicionar.config(bootstyle=OUTLINE)
         self.btn_remover_por_nome.config(bootstyle=OUTLINE)
         self.btn_devolver.config(bootstyle=OUTLINE)
 
-        # Define o estilo sólido para o botão do modo ativo
         if self.modo_manipulacao == "adicionar":
             self.btn_adicionar.config(bootstyle=PRIMARY)
         elif self.modo_manipulacao == "remover":
@@ -533,7 +584,7 @@ class TelaPontoVenda:
         container_direita.grid_propagate(False)
 
         # --- PAINEL ESQUERDO: PRODUTOS E TOTAL ---
-        container_esquerda.rowconfigure(2, weight=1) # A lista de produtos agora está na linha 2
+        container_esquerda.rowconfigure(2, weight=1) 
         container_esquerda.columnconfigure(0, weight=1)
 
         # Seção de Informações do Cliente
@@ -595,7 +646,7 @@ class TelaPontoVenda:
         # Chama a função para definir o estilo inicial dos botões
         self._atualizar_estilo_botoes_modo()
         
-        # Seção da Lista de Produtos (agora na linha 2)
+        # Seção da Lista de Produtos 
         frame_lista_produtos = ttk.Frame(container_esquerda)
         frame_lista_produtos.grid(row=2, column=0, sticky="nsew")
         frame_lista_produtos.rowconfigure(0, weight=1)
@@ -707,10 +758,10 @@ class TelaPontoVenda:
 
         # Garante que, ao voltar da edição do cliente, o estado da venda seja reaplicado na tela.
 
-        # 1. Re-exibe os produtos que já estão na memória
+        # 1. Re-exibe os produtos 
         self.exibir_produtos()
 
-        # 2. Re-exibe os pagamentos que já foram feitos
+        # 2. Re-exibe os pagamentos 
         self.exibir_pagamentos()
 
         # 3. RECALCULA E ATUALIZA TODOS OS TOTAIS E O VALOR A PAGAR
@@ -827,7 +878,7 @@ class TelaPontoVenda:
             
             self.produtos_na_venda.append(produto_devolvido)
             
-            # Apenas atualizamos a tela
+            # Apenas atualiza a tela
             self.exibir_produtos()
             self.atualizar_total()
             self.produto_var.set("")
@@ -864,7 +915,7 @@ class TelaPontoVenda:
         for i in self.tvw_produtos.get_children():
             self.tvw_produtos.delete(i)
         
-        # Preenche o treeview com os dados da nossa lista em memória
+        # Preenche o treeview com os dados da lista em memória
         for produto in self.produtos_na_venda:
             self.tvw_produtos.insert('', tk.END, values=(
                 produto['nome'],
@@ -1083,7 +1134,6 @@ class TelaPontoVenda:
             c.drawString(0.5*cm, posicao_y_atual, item_para_troca['nome'])
             posicao_y_atual -= espaco_entre_blocos
 
-            # --- NOVO BLOCO COMBINADO DE CÓDIGO E TAMANHO ---
             # Cabeçalho na mesma linha
             c.setFont("Helvetica-Bold", 8)
             c.drawString(0.5*cm, posicao_y_atual, "Código")

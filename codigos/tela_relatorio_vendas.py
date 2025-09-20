@@ -8,8 +8,8 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from ttkbootstrap.widgets import DateEntry # Importa o widget de calendário
-from crud import buscar_vendas_para_relatorio, listar_usuarios # Importa as funções necessárias
+from ttkbootstrap.widgets import DateEntry #
+from crud import buscar_vendas_para_relatorio, listar_usuarios 
 
 class TelaRelatorioVendas:
     def __init__(self, master):
@@ -19,7 +19,7 @@ class TelaRelatorioVendas:
     def mostrar_janela(self):
         if self.janela_relatorio and tk.Toplevel.winfo_exists(self.janela_relatorio):
             self.janela_relatorio.lift()
-            self._filtrar_vendas() # Atualiza
+            self._filtrar_vendas()
             return
         
         self.janela_relatorio = tk.Toplevel(self.master)
