@@ -82,6 +82,7 @@ class Consultas:
         janela_produtos.columnconfigure(0, weight=3); janela_produtos.columnconfigure(1, weight=1)
         janela_produtos.rowconfigure(0, weight=1)
 
+        # --- Frame da Esquerda (Lista) ---
         frame_esquerda = ttk.Frame(janela_produtos)
         frame_esquerda.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         frame_esquerda.rowconfigure(1, weight=1); frame_esquerda.columnconfigure(0, weight=1)
@@ -90,17 +91,8 @@ class Consultas:
         ttk.Label(frame_busca, text="Buscar:").pack(side=LEFT, padx=(0, 5))
         search_var = tk.StringVar(); entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
         entry_busca.pack(fill=X, expand=True); entry_busca.focus_set()
-        search_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(search_var, entry_busca))
-        produtos_completos = listar_produtos()
-        def _filtrar_visualizacao(event=None):
-            termo_busca = search_var.get().upper(); tree.delete(*tree.get_children())
-            for prod in produtos_completos:
-                if (termo_busca in str(prod.get('pro_ref', '')).upper() or termo_busca in str(prod.get('pro_sku', '')).upper() or termo_busca in str(prod.get('pro_descricao', '')).upper() or termo_busca in str(prod.get('pro_bipe', '')).upper()):
-                    valores = (prod['pro_id'], prod.get('pro_ref', ''), prod.get('pro_sku', ''), prod.get('pro_descricao', ''), prod.get('pro_tam', ''), prod.get('pro_valor')); 
-                    tree.insert("", "end", values=valores)
         
-        entry_busca.bind("<KeyRelease>", _filtrar_visualizacao)
-        _filtrar_visualizacao()
+        # --- CORREÇÃO: A criação da tabela (Treeview) foi movida para ANTES da função de filtro ---
         frame_tree = ttk.Frame(frame_esquerda); frame_tree.grid(row=1, column=0, sticky="nsew")
         frame_tree.rowconfigure(0, weight=1); frame_tree.columnconfigure(0, weight=1)
         
@@ -117,11 +109,34 @@ class Consultas:
             
         scrollbar = ttk.Scrollbar(frame_tree, orient="vertical", command=tree.yview); tree.configure(yscrollcommand=scrollbar.set); scrollbar.grid(row=0, column=1, sticky="ns")
 
+        # --- Agora a função de filtro pode ser definida, pois 'tree' já existe ---
+        produtos_completos = listar_produtos()
+        def _filtrar_visualizacao(event=None):
+            termo_busca = search_var.get().upper()
+            tree.delete(*tree.get_children()) # Agora 'tree' é acessível
+            for prod in produtos_completos:
+                if (termo_busca in str(prod.get('pro_ref', '')).upper() or 
+                    termo_busca in str(prod.get('pro_sku', '')).upper() or 
+                    termo_busca in str(prod.get('pro_descricao', '')).upper() or 
+                    termo_busca in str(prod.get('pro_bipe', '')).upper()):
+                    
+                    valores = (prod['pro_id'], prod.get('pro_ref', ''), prod.get('pro_sku', ''), 
+                               prod.get('pro_descricao', ''), prod.get('pro_tam', ''), prod.get('pro_valor'))
+                    tree.insert("", "end", values=valores)
+        
+        # Vincula os eventos às funções
+        search_var.trace_add('write', lambda *args: self._formatar_para_maiusculo(search_var, entry_busca))
+        entry_busca.bind("<KeyRelease>", _filtrar_visualizacao)
+        
+        # --- Frame da Direita (Imagem) ---
         frame_direita = ttk.Frame(janela_produtos, padding=10)
         frame_direita.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=10)
         frame_direita.rowconfigure(0, weight=1); frame_direita.columnconfigure(0, weight=1)
         lbl_imagem = ttk.Label(frame_direita, text="Selecione um produto", anchor="center", relief="solid")
         lbl_imagem.grid(row=0, column=0, sticky="nsew")
+        
+        # Popula a lista pela primeira vez
+        _filtrar_visualizacao()
         
         tree.bind('<<TreeviewSelect>>', lambda e: self._mostrar_imagem_selecionada_consulta(e, tree, 1, lbl_imagem))
 
