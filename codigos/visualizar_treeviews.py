@@ -92,7 +92,6 @@ class Consultas:
         search_var = tk.StringVar(); entry_busca = ttk.Entry(frame_busca, textvariable=search_var)
         entry_busca.pack(fill=X, expand=True); entry_busca.focus_set()
         
-        # --- CORREÇÃO: A criação da tabela (Treeview) foi movida para ANTES da função de filtro ---
         frame_tree = ttk.Frame(frame_esquerda); frame_tree.grid(row=1, column=0, sticky="nsew")
         frame_tree.rowconfigure(0, weight=1); frame_tree.columnconfigure(0, weight=1)
         

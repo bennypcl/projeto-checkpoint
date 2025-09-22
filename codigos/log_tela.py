@@ -157,6 +157,17 @@ class Tela:
         self.btn_finalizar_inventario = ttk.Button(frm_controle, text='Finalizar Inventário', command=self.finalizar_inventario, bootstyle=PRIMARY)
         self.btn_finalizar_inventario.pack(side=LEFT, padx=5)
         
+        # Busca a data no banco e cria o texto para o Label
+        data_ultimo_inv = crud.buscar_data_ultimo_inventario_finalizado()
+        if data_ultimo_inv:
+            texto_label = f"Último inventário finalizado em: {data_ultimo_inv.strftime('%d/%m/%Y às %H:%M')}"
+        else:
+            texto_label = "Nenhum inventário foi finalizado ainda."
+
+        # Adiciona o Label à direita, antes dos outros itens
+        ttk.Label(frm_controle, text=texto_label).pack(side=RIGHT, padx=10)
+        # --- FIM DA NOVA LÓGICA ---
+        
         self.btn_ad_contagem = ttk.Button(frm_controle, text='Conta Est. por SKU', command=self.contar_sku); self.btn_ad_contagem.pack(side=RIGHT, padx=5)
         self.modificador_var = tk.IntVar(value=1)
         self.spn_modificador = ttk.Spinbox(frm_controle, from_=1, to=10, textvariable=self.modificador_var, width=2); self.spn_modificador.pack(side=RIGHT, padx=2.5)

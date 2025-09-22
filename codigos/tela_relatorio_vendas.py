@@ -36,21 +36,12 @@ class TelaRelatorioVendas:
         frame_filtros.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         
         ttk.Label(frame_filtros, text="Vendedor:").pack(side=LEFT, padx=(0, 5))
-        
-        # Popula o filtro de vendedores
         vendedores = [u['usu_nome'] for u in listar_usuarios()]
         opcoes_filtro = ["Mostrar Tudo"] + sorted(vendedores)
-        
         self.cmb_filtro = ttk.Combobox(frame_filtros, values=opcoes_filtro, state="readonly")
         self.cmb_filtro.pack(side=LEFT, padx=(0, 15))
         self.cmb_filtro.set("Mostrar Tudo")
-
-        #self.cmb_filtro = ttk.Combobox(frame_filtros, values=opcoes_filtro, state="readonly")
-        #self.cmb_filtro.pack(side=LEFT)
-        #self.cmb_filtro.set("Mostrar Tudo")
-        #self.cmb_filtro.bind("<<ComboboxSelected>>", self._filtrar_vendas)
         
-        # --- CAMPOS DE DATA ---
         ttk.Label(frame_filtros, text="De:").pack(side=LEFT, padx=(0, 5))
         self.date_inicio = DateEntry(frame_filtros, bootstyle=PRIMARY, dateformat="%d/%m/%Y")
         self.date_inicio.pack(side=LEFT, padx=(0, 10))
@@ -62,7 +53,7 @@ class TelaRelatorioVendas:
         btn_buscar = ttk.Button(frame_filtros, text="Buscar", command=self._filtrar_vendas, bootstyle=PRIMARY)
         btn_buscar.pack(side=LEFT)
         
-        #Área Rolável
+        # --- Área Rolável (Com a correção) ---
         canvas = tk.Canvas(frame_principal, highlightthickness=0)
         scrollbar = ttk.Scrollbar(frame_principal, orient="vertical", command=canvas.yview)
         self.scrollable_frame = ttk.Frame(canvas, padding=10)
@@ -70,14 +61,26 @@ class TelaRelatorioVendas:
         self.scrollable_frame.columnconfigure(1, weight=4)
         self.scrollable_frame.columnconfigure(2, weight=3)
         self.scrollable_frame.columnconfigure(3, weight=2)
+        
         self.scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas_frame_id = canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_frame_id, width=e.width))
+        
         canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # --- INÍCIO DA CORREÇÃO: LÓGICA PARA ROLAGEM COM O MOUSE ---
+        def _on_mousewheel(event):
+            # No Windows, event.delta é um múltiplo de 120. A divisão ajusta a velocidade.
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+        # Vincula o evento da roda do mouse à função de rolagem
+        self.scrollable_frame.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        self.scrollable_frame.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        # --- FIM DA CORREÇÃO ---
+        
         canvas.grid(row=1, column=0, sticky="nsew")
         scrollbar.grid(row=1, column=1, sticky="ns")
         
-        #Totais e Botão PDF
+        # --- Rodapé ---
         frame_rodape = ttk.LabelFrame(frame_principal, text="Resumo do Relatório", padding=10)
         frame_rodape.grid(row=2, column=0, sticky="ew", pady=(10, 0))
         self.lbl_total_vendas = ttk.Label(frame_rodape, text="Total de Vendas: 0", font="-weight bold")
@@ -88,7 +91,6 @@ class TelaRelatorioVendas:
         btn_pdf = ttk.Button(frame_rodape, text="Baixar PDF do Relatório", command=self.gerar_relatorio_completo_pdf)
         btn_pdf.pack(side=RIGHT, padx=10)
 
-        # Inicia a tela com uma busca inicial (sem filtros)
         self._filtrar_vendas()
 
     def _filtrar_vendas(self, event=None):

@@ -791,6 +791,8 @@ class TelaPontoVenda:
         self.valor_editavel.delete(0, tk.END)
         self.valor_editavel.insert(0, f"{self.valor_restante:.2f}")
 
+    # Em tela_ponto_venda.py
+
     def adicionar_produto(self):
         self._limpar_pagamentos_e_descontos_se_necessario()
 
@@ -801,8 +803,26 @@ class TelaPontoVenda:
         produto_db = buscar_produto_por_sku_ou_bipe(sku_digitado)
         
         if produto_db:
+            # --- INÍCIO DA VERIFICAÇÃO DE PRODUTO PDV ---
+            if "pdv" in produto_db['pro_descricao'].lower():
+                messagebox.showerror(
+                    "Venda Proibida",
+                    f"O item '{produto_db['pro_descricao']}' é um material de Ponto de Venda e não pode ser vendido.",
+                    parent=self.janela_pdv
+                )
+                self.produto_var.set("") # Limpa o campo de entrada
+                return # Impede a adição do produto à venda
+            # --- FIM DA VERIFICAÇÃO ---
+
+            # Verifica se o produto já está na venda (lógica que já tínhamos)
+            if any(p['codigo'] == produto_db['pro_sku'] for p in self.produtos_na_venda):
+                messagebox.showwarning("Produto Duplicado", f"O produto '{produto_db['pro_descricao']}' já foi adicionado a esta venda.", parent=self.janela_pdv)
+                self.produto_var.set("")
+                return
+            
+            # Se passar em todas as verificações, adiciona o produto
             novo_produto = {
-                'id': produto_db['pro_id'], # Guarda o ID do produto
+                'id': produto_db['pro_id'],
                 'nome': produto_db['pro_descricao'],
                 'codigo': produto_db['pro_sku'],
                 'bipe': produto_db.get('pro_bipe'),

@@ -791,3 +791,33 @@ def incrementar_estoque_item_inventario(id_inventario, sku_produto):
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
+
+def buscar_data_ultimo_inventario_finalizado():
+    """Busca a data de finalização do último inventário com status 'Finalizado'."""
+    try:
+        conn = conectar()
+        if not conn: return None
+        
+        cursor = conn.cursor(dictionary=True)
+        sql = """
+            SELECT inv_data_finalizacao 
+            FROM inventarios 
+            WHERE inv_status = 'Finalizado' 
+            ORDER BY inv_data_finalizacao DESC 
+            LIMIT 1
+        """
+        cursor.execute(sql)
+        resultado = cursor.fetchone()
+        
+        return resultado['inv_data_finalizacao'] if resultado else None
+        
+    except Exception as e:
+        messagebox.showerror("Erro de Banco de Dados", f"Falha ao buscar data do último inventário: {e}")
+        return None
+    finally:
+        if 'conn' in locals() and conn and conn.is_connected():
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            conn.close()
+    
+    
