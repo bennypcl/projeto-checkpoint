@@ -1092,6 +1092,21 @@ class TelaPontoVenda:
         def confirmar():
             bandeira = cmb.get()
             parcelas = spin.get()
+            
+            try:
+                parcelas = int(parcelas)
+                if parcelas > 6:
+                    messagebox.showwarning(
+                        "Valor Inválido",
+                        "O número de parcelas não pode ser maior que 6.",
+                        parent=self.janela_pdv
+                    )
+                    spin.set(6) # Corrige o valor para o máximo permitido
+                    return # Impede o registro do pagamento
+            except ValueError:
+                messagebox.showerror("Erro de Formato", "Por favor, insira um número válido de parcelas.", parent=self.janela_pdv)
+                return
+            
             if bandeira and parcelas:
                 detalhes_pagamento = {"bandeira": bandeira, "parcelas": int(parcelas)}
                 self.registrar_pagamento("Crédito", valor_pago, detalhes_pagamento)
@@ -1180,9 +1195,24 @@ class TelaPontoVenda:
 
     def finalizar_venda(self):
         # Validações iniciais (se há produtos e se a conta foi paga)
-        if self.total_compra < 0 or not self.produtos_na_venda:
-            messagebox.showwarning("Venda inválida", "Nenhum produto adicionado.", parent=self.janela_pdv)
+        if not self.produtos_na_venda:
+            messagebox.showwarning("Venda Inválida", "Nenhum produto foi adicionado à venda.", parent=self.janela_pdv)
             return
+
+        # 2. Lógica específica para Vendas e Trocas
+        if self.vendedor_selecionado == "TROCA":
+            # Se for uma troca, verifica se há pelo menos um item com preço positivo (o item que o cliente está levando)
+            tem_item_novo = any(produto['preco'] > 0 for produto in self.produtos_na_venda)
+            if not tem_item_novo:
+                messagebox.showwarning("Troca Incompleta", 
+                "Você adicionou um item para devolução. É necessário adicionar pelo menos um novo produto para realizar a troca.",
+                parent=self.janela_pdv)
+                return
+        else: # Se for uma Venda Normal
+            # A regra antiga se aplica: o total não pode ser negativo.
+            if self.total_compra < 0:
+                messagebox.showerror("Venda Inválida", "O total de uma venda normal не pode ser negativo.", parent=self.janela_pdv)
+                return
 
         if self.valor_restante > 0.009: 
             messagebox.showerror("Erro", "Ainda há valor pendente de pagamento.", parent=self.janela_pdv)
