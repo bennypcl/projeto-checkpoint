@@ -57,25 +57,32 @@ class TelaRelatorioVendas:
         canvas = tk.Canvas(frame_principal, highlightthickness=0)
         scrollbar = ttk.Scrollbar(frame_principal, orient="vertical", command=canvas.yview)
         self.scrollable_frame = ttk.Frame(canvas, padding=10)
-        self.scrollable_frame.columnconfigure(0, weight=3)
-        self.scrollable_frame.columnconfigure(1, weight=4)
-        self.scrollable_frame.columnconfigure(2, weight=3)
-        self.scrollable_frame.columnconfigure(3, weight=2)
+        
+        # --- ALTERAÇÃO 1 ---
+        # Apenas uma coluna no grid principal do scrollable_frame, que ocupará todo o espaço.
+        # Os cards de venda serão colocados nesta coluna.
+        self.scrollable_frame.columnconfigure(0, weight=1)
         
         self.scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        
+        # --- ALTERAÇÃO 2 ---
+        # Corrigido o 'anchor' para "nw" (canto superior esquerdo), que é o correto.
         canvas_frame_id = canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         
         canvas.configure(yscrollcommand=scrollbar.set)
-        
-        # --- INÍCIO DA CORREÇÃO: LÓGICA PARA ROLAGEM COM O MOUSE ---
+
+        # --- ALTERAÇÃO 3 ---
+        # Adicionada a lógica que força o frame a ter a altura do canvas,
+        # essencial para a centralização vertical funcionar.
+        def _on_canvas_configure(event):
+            canvas.itemconfig(canvas_frame_id, height=event.height, width=event.width)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
         def _on_mousewheel(event):
-            # No Windows, event.delta é um múltiplo de 120. A divisão ajusta a velocidade.
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
 
-        # Vincula o evento da roda do mouse à função de rolagem
         self.scrollable_frame.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
         self.scrollable_frame.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
-        # --- FIM DA CORREÇÃO ---
         
         canvas.grid(row=1, column=0, sticky="nsew")
         scrollbar.grid(row=1, column=1, sticky="ns")
@@ -114,49 +121,78 @@ class TelaRelatorioVendas:
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
 
-        row_counter = 0
-        for venda in dados_das_vendas:
-            cliente = venda.get('cliente', {})
-            if not cliente.get('cpf'):
-                texto_cliente = "Cliente não identificado"
-            else:
-                info_list = [
-                    cliente.get('nome', 'N/A'),
-                    cliente.get('cpf', ''),
-                    cliente.get('telefone', ''),
-                    cliente.get('nascimento', '')
-                ]
-                texto_cliente = "\n".join(filter(None, info_list)) # remove strings vazias
+        if not dados_das_vendas:
+            # Com as correções em mostrar_janela, esta lógica agora centraliza perfeitamente.
+            self.scrollable_frame.rowconfigure(0, weight=1)
+            self.scrollable_frame.columnconfigure(0, weight=1)
 
-            texto_produtos = "\n".join(venda['produtos'])
-            texto_pagamentos = "\n".join([f"- {forma}: R$ {valor:.2f}" for forma, valor in venda['pagamentos']])
+            ttk.Label(
+                self.scrollable_frame, 
+                text="Nenhum registro de venda encontrado para o filtro selecionado.",
+                font=("Helvetica", 16),
+                bootstyle="secondary"
+            ).grid(row=0, column=0) # Removido o columnspan desnecessário
+        else:
+            # Reseta a configuração do grid para a exibição da lista
+            self.scrollable_frame.rowconfigure(0, weight=0)
             
-            desconto_info = venda.get('desconto', '')
-            cabecalho_desconto = "Desconto" if desconto_info else ""
-            valor_desconto = desconto_info
+            # --- ALTERAÇÃO 4 ---
+            # Loop principal agora cria um "card" (LabelFrame) para cada venda.
+            for index, venda in enumerate(dados_das_vendas):
+                
+                # Cria um LabelFrame para a venda com o nome do vendedor como título
+                card_venda = ttk.LabelFrame(
+                    self.scrollable_frame, 
+                    text=f"Venda por: {venda['vendedor']}", 
+                    padding=10
+                )
+                # Posiciona o card na grid principal, fazendo-o esticar horizontalmente ('ew')
+                card_venda.grid(row=index, column=0, sticky="ew", pady=(0, 15))
 
-            ttk.Label(self.scrollable_frame, text=f"Venda por: {venda['vendedor']}", font="-weight bold").grid(row=row_counter, column=0, columnspan=4, sticky="w", pady=(15, 5))
-            row_counter += 1
-            ttk.Label(self.scrollable_frame, text="Cliente", font="-weight bold").grid(row=row_counter, column=0, sticky="nw")
-            ttk.Label(self.scrollable_frame, text="Produtos", font="-weight bold").grid(row=row_counter, column=1, sticky="nw")
-            ttk.Label(self.scrollable_frame, text="Pagamento", font="-weight bold").grid(row=row_counter, column=2, sticky="nw")
-            ttk.Label(self.scrollable_frame, text=cabecalho_desconto, font="-weight bold").grid(row=row_counter, column=3, sticky="nw")
-            row_counter += 1
-            ttk.Label(self.scrollable_frame, text=texto_cliente, justify=LEFT).grid(row=row_counter, column=0, sticky="nw", pady=(5,0), padx=(0,10))
-            ttk.Label(self.scrollable_frame, text=texto_produtos, justify=LEFT).grid(row=row_counter, column=1, sticky="nw", pady=(5,0), padx=10)
-            ttk.Label(self.scrollable_frame, text=texto_pagamentos, justify=LEFT).grid(row=row_counter, column=2, sticky="nw", pady=(5,0), padx=10)
-            ttk.Label(self.scrollable_frame, text=valor_desconto, justify=LEFT).grid(row=row_counter, column=3, sticky="nw", pady=(5,0), padx=10)
-            row_counter += 1
-            ttk.Label(self.scrollable_frame, text=f"TOTAL DA COMPRA: R$ {venda['ped_total']:.2f}", font="-weight bold").grid(row=row_counter, column=2, columnspan=2, sticky="e", pady=5)
-            row_counter += 1
-            ttk.Separator(self.scrollable_frame, orient=HORIZONTAL).grid(row=row_counter, column=0, columnspan=4, sticky="ew", pady=15)
-            row_counter += 1
+                # Configura o grid INTERNO do card para ter 4 colunas com pesos
+                card_venda.columnconfigure(0, weight=3)
+                card_venda.columnconfigure(1, weight=4)
+                card_venda.columnconfigure(2, weight=3)
+                card_venda.columnconfigure(3, weight=2)
+
+                # Prepara os textos como antes
+                cliente = venda.get('cliente', {})
+                if not cliente.get('cpf'):
+                    texto_cliente = "Cliente não identificado"
+                else:
+                    info_list = [
+                        cliente.get('nome', 'N/A'),
+                        cliente.get('cpf', ''),
+                        cliente.get('telefone', ''),
+                        cliente.get('nascimento', '')
+                    ]
+                    texto_cliente = "\n".join(filter(None, info_list))
+
+                texto_produtos = "\n".join(venda['produtos'])
+                texto_pagamentos = "\n".join([f"- {forma}: R$ {valor:.2f}" for forma, valor in venda['pagamentos']])
+                desconto_info = venda.get('desconto', '')
+                cabecalho_desconto = "Desconto" if desconto_info else ""
+                
+                # Adiciona os cabeçalhos DENTRO do grid do card_venda
+                ttk.Label(card_venda, text="Cliente", font="-weight bold").grid(row=0, column=0, sticky="nw")
+                ttk.Label(card_venda, text="Produtos", font="-weight bold").grid(row=0, column=1, sticky="nw")
+                ttk.Label(card_venda, text="Pagamento", font="-weight bold").grid(row=0, column=2, sticky="nw")
+                ttk.Label(card_venda, text=cabecalho_desconto, font="-weight bold").grid(row=0, column=3, sticky="nw")
+                
+                # Adiciona os dados DENTRO do grid do card_venda
+                ttk.Label(card_venda, text=texto_cliente, justify=LEFT).grid(row=1, column=0, sticky="nw", pady=(5,0), padx=(0,10))
+                ttk.Label(card_venda, text=texto_produtos, justify=LEFT).grid(row=1, column=1, sticky="nw", pady=(5,0), padx=10)
+                ttk.Label(card_venda, text=texto_pagamentos, justify=LEFT).grid(row=1, column=2, sticky="nw", pady=(5,0), padx=10)
+                ttk.Label(card_venda, text=desconto_info, justify=LEFT).grid(row=1, column=3, sticky="nw", pady=(5,0), padx=10)
+                
+                # Adiciona o total DENTRO do grid do card_venda
+                ttk.Label(card_venda, text=f"TOTAL DA COMPRA: R$ {venda['ped_total']:.2f}", font="-weight bold").grid(row=2, column=2, columnspan=2, sticky="e", pady=5)
 
         # Atualiza o rodapé com os totais do filtro atual
         total_arrecadado = sum(v['ped_total'] for v in dados_das_vendas)
         self.lbl_total_vendas.config(text=f"Total de Vendas: {len(dados_das_vendas)}")
         self.lbl_valor_arrecadado.config(text=f"Valor Arrecadado: R$ {total_arrecadado:.2f}")
-
+        
     def gerar_relatorio_completo_pdf(self):
         dados_para_pdf = self.dados_filtrados
         

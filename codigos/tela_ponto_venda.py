@@ -424,7 +424,7 @@ class TelaPontoVenda:
             try:
                 data_nascimento = datetime(int(ano_str), int(mes_str), int(dia_str))
                 if data_nascimento.date() > datetime.now().date():
-                    messagebox.showerror("Data Inválida", "A data de nascimento не pode ser uma data futura.", parent=self.janela_pdv)
+                    messagebox.showerror("Data Inválida", "A data de nascimento não pode ser uma data futura.", parent=self.janela_pdv)
                     return
             except ValueError:
                 messagebox.showerror("Data Inválida", "A data de nascimento informada (ex: 31 de Fev) não é válida.", parent=self.janela_pdv)
@@ -803,24 +803,21 @@ class TelaPontoVenda:
         produto_db = buscar_produto_por_sku_ou_bipe(sku_digitado)
         
         if produto_db:
-            # --- INÍCIO DA VERIFICAÇÃO DE PRODUTO PDV ---
+            # --- VERIFICAÇÃO DE PRODUTO PDV (Mantida) ---
             if "pdv" in produto_db['pro_descricao'].lower():
                 messagebox.showerror(
                     "Venda Proibida",
                     f"O item '{produto_db['pro_descricao']}' é um material de Ponto de Venda e não pode ser vendido.",
                     parent=self.janela_pdv
                 )
-                self.produto_var.set("") # Limpa o campo de entrada
-                return # Impede a adição do produto à venda
-            # --- FIM DA VERIFICAÇÃO ---
-
-            # Verifica se o produto já está na venda (lógica que já tínhamos)
-            if any(p['codigo'] == produto_db['pro_sku'] for p in self.produtos_na_venda):
-                messagebox.showwarning("Produto Duplicado", f"O produto '{produto_db['pro_descricao']}' já foi adicionado a esta venda.", parent=self.janela_pdv)
                 self.produto_var.set("")
                 return
+
+            # --- LÓGICA DE VERIFICAÇÃO DE ESTOQUE REMOVIDA ---
+            # O bloco de código que contava os itens na venda e comparava com o estoque
+            # foi removido daqui para atender ao novo requisito.
             
-            # Se passar em todas as verificações, adiciona o produto
+            # Se passar na verificação de PDV, adiciona o produto diretamente.
             novo_produto = {
                 'id': produto_db['pro_id'],
                 'nome': produto_db['pro_descricao'],

@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from ttkbootstrap.constants import SUCCESS, SECONDARY
 from tkinter.constants import BOTH, X, BOTTOM, RIGHT
-
+import configparser
 class GerenciadorTema:
     def __init__(self, janela):
         self.janela = janela
@@ -56,8 +56,16 @@ class GerenciadorTema:
             tema_real = self.temas[tema_visivel]
             try:
                 self.janela.style.theme_use(tema_real)
-                if hasattr(self, 'tpl_menu') and self.tpl_menu.winfo_exists():
-                    ttk.Style().theme_use(tema_real)
+                
+                # Salva o tema escolhido no arquivo de configuração
+                config = configparser.ConfigParser()
+                config['CONFIGURACAO'] = {'tema': tema_real}
+                with open('config.ini', 'w') as configfile:
+                    config.write(configfile)
+                
+                # Fecha a janela de temas após a confirmação
+                self.tpl_temas.destroy()
+
             except tk.TclError:
                 messagebox.showwarning("Erro de Tema", f"Não foi possível aplicar o tema '{tema_real}'. Pode não estar instalado.")
         else:

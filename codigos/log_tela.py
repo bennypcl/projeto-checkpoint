@@ -13,6 +13,7 @@ from tela_ponto_venda import TelaPontoVenda
 from relatorio_pdf import gerar_relatorio_pdf
 from visualizar_treeviews import Consultas
 from tela_relatorio_vendas import TelaRelatorioVendas
+import configparser
 
 class Tela:
     def __init__(self, master):
@@ -117,8 +118,8 @@ class Tela:
         self.tpl_menu = self.janela
         self.tpl_menu.title("Controle de Inventário")
         self.mnu_principal = tk.Menu(self.tpl_menu)
-        self.mnu_inventario = tk.Menu(self.mnu_principal, tearoff=0); self.mnu_principal.add_cascade(label='Inventário', menu=self.mnu_inventario)
-        self.mnu_inventario.add_command(label='Recarregar Interface', command=self.interacao_inventario)
+        # self.mnu_inventario = tk.Menu(self.mnu_principal, tearoff=0); self.mnu_principal.add_cascade(label='Inventário', menu=self.mnu_inventario)
+        # self.mnu_inventario.add_command(label='Recarregar Interface', command=self.interacao_inventario)
         self.mnu_pt_vendas = tk.Menu(self.mnu_principal, tearoff=0); self.mnu_principal.add_cascade(label='Ponto de Venda', menu=self.mnu_pt_vendas)
         self.mnu_pt_vendas.add_command(label='Nova Venda', command=self.tela_venda.iniciar_pdv)
         self.mnu_configuracao = tk.Menu(self.mnu_principal, tearoff=0); self.mnu_principal.add_cascade(label='Configurações', menu=self.mnu_configuracao)
@@ -170,10 +171,10 @@ class Tela:
         
         self.btn_ad_contagem = ttk.Button(frm_controle, text='Conta Est. por SKU', command=self.contar_sku); self.btn_ad_contagem.pack(side=RIGHT, padx=5)
         self.modificador_var = tk.IntVar(value=1)
-        self.spn_modificador = ttk.Spinbox(frm_controle, from_=1, to=10, textvariable=self.modificador_var, width=2); self.spn_modificador.pack(side=RIGHT, padx=2.5)
+        self.spn_modificador = ttk.Spinbox(frm_controle, from_=1, to=10, textvariable=self.modificador_var, width=2); self.spn_modificador.pack(side=RIGHT, padx=3)
 
         self.ent_ad_contagem = ttk.Entry(frm_controle, textvariable=self.sku_contagem_var)
-        self.ent_ad_contagem.pack(side=RIGHT, padx=2.5)
+        self.ent_ad_contagem.pack(side=RIGHT, padx=3)
         self.ent_ad_contagem.bind('<Return>', self.contar_sku)
         self.sku_contagem_var.trace_add('write',
             lambda *args: self._formatar_para_maiusculo(self.sku_contagem_var, self.ent_ad_contagem))
@@ -676,24 +677,47 @@ class Tela:
 
     def editar_celula(self, event):
         item_iid = self.tvw_inventario.focus()
+        # A coluna de "Est. Real" é a #7
         coluna_id_str = self.tvw_inventario.identify_column(event.x)
         if not item_iid or coluna_id_str != "#7": return
         
         try:
             valores_atuais = list(self.tvw_inventario.item(item_iid, "values"))
-            novo_valor = simpledialog.askinteger("Editar Estoque Real", "Digite a quantidade contada:", initialvalue=valores_atuais[5])
+            # O valor inicial do diálogo será o estoque do sistema, para facilitar a digitação
+            valor_inicial = valores_atuais[5] if valores_atuais[6] == "" else valores_atuais[6]
+            
+            novo_valor = simpledialog.askinteger(
+                "Editar Estoque Real", 
+                "Digite a quantidade contada:", 
+                initialvalue=valor_inicial,
+                parent=self.janela # Garante que o diálogo apareça sobre a janela principal
+            )
+
+            # --- INÍCIO DA ALTERAÇÃO ---
+            # Adicionada verificação para impedir valores negativos.
+            if novo_valor is not None and novo_valor < 0:
+                messagebox.showerror(
+                    "Valor Inválido", 
+                    "Não é permitido inserir um valor de estoque negativo.",
+                    parent=self.janela
+                )
+                return # Interrompe a função antes de salvar o valor negativo.
+            # --- FIM DA ALTERAÇÃO ---
 
             if novo_valor is not None:
+                # Procura o item na lista de dados em memória para atualizar
                 for i, data in enumerate(self.dados_originais):
                     if data[0] == item_iid:
                         self.dados_originais[i][7] = novo_valor
                         sku_do_item = self.dados_originais[i][2]
+                        # Atualiza o valor no banco de dados (na tabela de itens do inventário)
                         crud.atualizar_contagem_item(self.id_inventario_ativo, sku_do_item, novo_valor)
-                        self.inventario_modificado = True #Inventário foi modificado
+                        self.inventario_modificado = True # Marca que o inventário foi modificado
                         break
                 
                 # Recarrega a treeview para que a lógica de cores seja reaplicada
-                self.filtrar_treeview(None)
+                # Usar o filtro que já estava ativo em vez de resetar para "Mostrar Todos"
+                self.filtrar_treeview(self.ultimo_filtro_botao)
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro na edição: {e}")
 
@@ -747,15 +771,30 @@ class Tela:
         # VERIFICAÇÃO DE ITENS PENDENTES DE CADASTRO
         if self.itens_pendentes_cadastro:
             messagebox.showwarning("Cadastro Pendente", 
-                                   f"Existem {len(self.itens_pendentes_cadastro)} produto(s) que não foram cadastrados na base de dados.\n\n"
-                                   "É necessário cadastrá-los antes de finalizar o inventário.", 
-                                   parent=self.janela)
+                                  f"Existem {len(self.itens_pendentes_cadastro)} produto(s) que não foram cadastrados na base de dados.\n\n"
+                                  "É necessário cadastrá-los antes de finalizar o inventário.", 
+                                  parent=self.janela)
             self._abrir_janela_cadastro_pendentes()
-            return # Impede a continuação da finalização
+            return
 
         if not self.inventario_iniciado:
             return
         
+        # Validação de estoque real negativo
+        for item_data in self.dados_originais:
+            try:
+                estoque_real = int(item_data[7])
+                if estoque_real < 0:
+                    sku_do_item = item_data[2]
+                    messagebox.showerror(
+                        "Estoque Real Negativo",
+                        f"O inventário não pode ser finalizado.\n\nO produto com SKU '{sku_do_item}' está com estoque real negativo ({estoque_real}).",
+                        parent=self.janela
+                    )
+                    return
+            except (ValueError, TypeError):
+                continue
+
         itens_pendentes = [item for item in self.dados_originais if str(item[7]).strip() == ""]
         
         decisao_usuario = "finalizar"
@@ -766,13 +805,19 @@ class Tela:
         if decisao_usuario == "finalizar":
             if crud.finalizar_inventario_db(self.id_inventario_ativo):
                 messagebox.showinfo("Sucesso", "Inventário finalizado e salvo no histórico de inventários.", parent=self.janela)
+                
+                # --- INÍCIO DA CORREÇÃO ---
+                # Limpa os dados da sessão de inventário
                 self.dados_originais.clear()
                 self.inventario_iniciado = False
                 self.inventario_modificado = False
                 self.id_inventario_ativo = None
-                self.filtrar_treeview(None)
-                self._atualizar_estado_botoes_inventario()
-        
+                
+                # Chama a função que redesenha a interface inteira,
+                # garantindo que a label com a data seja atualizada.
+                self.interacao_inventario()
+                # --- FIM DA CORREÇÃO ---
+
         elif decisao_usuario == "ver_pendentes":
             self.filtrar_treeview(("est_real", "vazio"))
 
@@ -1171,6 +1216,16 @@ class Tela:
         mostrar_item_atual()
 
 if __name__ == "__main__":
-    janela = ttk.Window(themename='united')
+    config = configparser.ConfigParser()
+    tema_salvo = 'united' # Tema padrão caso o arquivo não exista ou falhe a leitura
+    try:
+        config.read('config.ini')
+        # Usa 'fallback' como uma segurança extra
+        tema_salvo = config.get('CONFIGURACAO', 'tema', fallback='united')
+    except Exception as e:
+        print(f"Não foi possível ler o arquivo de configuração, usando tema padrão: {e}")
+    
+    # Inicia a janela com o tema salvo (ou o padrão)
+    janela = ttk.Window(themename=tema_salvo)
     app = Tela(janela)
     janela.mainloop()
