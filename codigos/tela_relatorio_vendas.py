@@ -10,6 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import cm
 from ttkbootstrap.widgets import DateEntry #
 from crud import buscar_vendas_para_relatorio, listar_usuarios 
+from ttkbootstrap.scrolled import ScrolledFrame
 
 class TelaRelatorioVendas:
     def __init__(self, master):
@@ -53,39 +54,15 @@ class TelaRelatorioVendas:
         btn_buscar = ttk.Button(frame_filtros, text="Buscar", command=self._filtrar_vendas, bootstyle=PRIMARY)
         btn_buscar.pack(side=LEFT)
         
-        # --- Área Rolável (Com a correção) ---
-        canvas = tk.Canvas(frame_principal, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(frame_principal, orient="vertical", command=canvas.yview)
-        self.scrollable_frame = ttk.Frame(canvas, padding=10)
+# --- Área Rolável (Versão Simplificada com ScrolledFrame) ---
+        # O ScrolledFrame cuida de toda a lógica do canvas e da barra de rolagem.
+        # O argumento 'autohide=True' faz a barra de rolagem sumir quando não é necessária.
+        self.frame_conteudo = ScrolledFrame(frame_principal, autohide=True)
+        self.frame_conteudo.grid(row=1, column=0, sticky="nsew")
         
-        # --- ALTERAÇÃO 1 ---
-        # Apenas uma coluna no grid principal do scrollable_frame, que ocupará todo o espaço.
-        # Os cards de venda serão colocados nesta coluna.
-        self.scrollable_frame.columnconfigure(0, weight=1)
-        
-        self.scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        
-        # --- ALTERAÇÃO 2 ---
-        # Corrigido o 'anchor' para "nw" (canto superior esquerdo), que é o correto.
-        canvas_frame_id = canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        # --- ALTERAÇÃO 3 ---
-        # Adicionada a lógica que força o frame a ter a altura do canvas,
-        # essencial para a centralização vertical funcionar.
-        def _on_canvas_configure(event):
-            canvas.itemconfig(canvas_frame_id, height=event.height, width=event.width)
-        canvas.bind("<Configure>", _on_canvas_configure)
-
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-
-        self.scrollable_frame.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
-        self.scrollable_frame.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
-        
-        canvas.grid(row=1, column=0, sticky="nsew")
-        scrollbar.grid(row=1, column=1, sticky="ns")
+        # Configura a coluna interna do ScrolledFrame para que os cards se expandam
+        # na largura total. O ScrolledFrame é, em si, o container.
+        self.frame_conteudo.columnconfigure(0, weight=1)
         
         # --- Rodapé ---
         frame_rodape = ttk.LabelFrame(frame_principal, text="Resumo do Relatório", padding=10)
@@ -118,44 +95,43 @@ class TelaRelatorioVendas:
         self._popular_relatorio(self.dados_filtrados)
 
     def _popular_relatorio(self, dados_das_vendas):
-        for widget in self.scrollable_frame.winfo_children():
+        # Limpa o frame de conteúdo antes de adicionar novos widgets
+        for widget in self.frame_conteudo.winfo_children():
             widget.destroy()
 
         if not dados_das_vendas:
-            # Com as correções em mostrar_janela, esta lógica agora centraliza perfeitamente.
-            self.scrollable_frame.rowconfigure(0, weight=1)
-            self.scrollable_frame.columnconfigure(0, weight=1)
-
+            # Lógica para quando não há resultados (não precisa mudar)
+            self.frame_conteudo.rowconfigure(0, weight=1) # Centraliza a mensagem
+            
             ttk.Label(
-                self.scrollable_frame, 
+                self.frame_conteudo, 
                 text="Nenhum registro de venda encontrado para o filtro selecionado.",
                 font=("Helvetica", 16),
                 bootstyle="secondary"
-            ).grid(row=0, column=0) # Removido o columnspan desnecessário
+            ).grid(row=0, column=0)
         else:
             # Reseta a configuração do grid para a exibição da lista
-            self.scrollable_frame.rowconfigure(0, weight=0)
+            self.frame_conteudo.rowconfigure(0, weight=0)
             
-            # --- ALTERAÇÃO 4 ---
-            # Loop principal agora cria um "card" (LabelFrame) para cada venda.
             for index, venda in enumerate(dados_das_vendas):
-                
-                # Cria um LabelFrame para a venda com o nome do vendedor como título
+                # O card da venda agora é filho direto do self.frame_conteudo
                 card_venda = ttk.LabelFrame(
-                    self.scrollable_frame, 
+                    self.frame_conteudo,  # <-- MUDANÇA AQUI
                     text=f"Venda por: {venda['vendedor']}", 
                     padding=10
                 )
-                # Posiciona o card na grid principal, fazendo-o esticar horizontalmente ('ew')
                 card_venda.grid(row=index, column=0, sticky="ew", pady=(0, 15))
 
+                # O resto do seu código para popular o card não precisa de NENHUMA alteração.
+                # ... (o código que configura as colunas do card_venda e adiciona os labels) ...
                 # Configura o grid INTERNO do card para ter 4 colunas com pesos
                 card_venda.columnconfigure(0, weight=3)
                 card_venda.columnconfigure(1, weight=4)
                 card_venda.columnconfigure(2, weight=3)
                 card_venda.columnconfigure(3, weight=2)
 
-                # Prepara os textos como antes
+                # ... (todo o resto do seu código que cria os labels de cliente, produto, etc) ...
+                # ... ele já está correto e pode ser mantido como está.
                 cliente = venda.get('cliente', {})
                 if not cliente.get('cpf'):
                     texto_cliente = "Cliente não identificado"
@@ -167,28 +143,22 @@ class TelaRelatorioVendas:
                         cliente.get('nascimento', '')
                     ]
                     texto_cliente = "\n".join(filter(None, info_list))
-
                 texto_produtos = "\n".join(venda['produtos'])
                 texto_pagamentos = "\n".join([f"- {forma}: R$ {valor:.2f}" for forma, valor in venda['pagamentos']])
                 desconto_info = venda.get('desconto', '')
                 cabecalho_desconto = "Desconto" if desconto_info else ""
-                
-                # Adiciona os cabeçalhos DENTRO do grid do card_venda
                 ttk.Label(card_venda, text="Cliente", font="-weight bold").grid(row=0, column=0, sticky="nw")
                 ttk.Label(card_venda, text="Produtos", font="-weight bold").grid(row=0, column=1, sticky="nw")
                 ttk.Label(card_venda, text="Pagamento", font="-weight bold").grid(row=0, column=2, sticky="nw")
                 ttk.Label(card_venda, text=cabecalho_desconto, font="-weight bold").grid(row=0, column=3, sticky="nw")
-                
-                # Adiciona os dados DENTRO do grid do card_venda
                 ttk.Label(card_venda, text=texto_cliente, justify=LEFT).grid(row=1, column=0, sticky="nw", pady=(5,0), padx=(0,10))
                 ttk.Label(card_venda, text=texto_produtos, justify=LEFT).grid(row=1, column=1, sticky="nw", pady=(5,0), padx=10)
                 ttk.Label(card_venda, text=texto_pagamentos, justify=LEFT).grid(row=1, column=2, sticky="nw", pady=(5,0), padx=10)
                 ttk.Label(card_venda, text=desconto_info, justify=LEFT).grid(row=1, column=3, sticky="nw", pady=(5,0), padx=10)
-                
-                # Adiciona o total DENTRO do grid do card_venda
                 ttk.Label(card_venda, text=f"TOTAL DA COMPRA: R$ {venda['ped_total']:.2f}", font="-weight bold").grid(row=2, column=2, columnspan=2, sticky="e", pady=5)
 
-        # Atualiza o rodapé com os totais do filtro atual
+
+        # O código do rodapé também não precisa de alterações
         total_arrecadado = sum(v['ped_total'] for v in dados_das_vendas)
         self.lbl_total_vendas.config(text=f"Total de Vendas: {len(dados_das_vendas)}")
         self.lbl_valor_arrecadado.config(text=f"Valor Arrecadado: R$ {total_arrecadado:.2f}")
