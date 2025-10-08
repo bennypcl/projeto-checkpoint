@@ -1100,6 +1100,14 @@ class TelaPontoVenda:
                     )
                     spin.set(6) # Corrige o valor para o máximo permitido
                     return # Impede o registro do pagamento
+                if parcelas < 1:
+                    messagebox.showwarning(
+                        "Valor Inválido",
+                        "O número de parcelas não pode ser menor que 1.",
+                        parent=self.janela_pdv
+                    )
+                    spin.set(1) # Corrige o valor para o máximo permitido
+                    return # Impede o registro do pagamento
             except ValueError:
                 messagebox.showerror("Erro de Formato", "Por favor, insira um número válido de parcelas.", parent=self.janela_pdv)
                 return

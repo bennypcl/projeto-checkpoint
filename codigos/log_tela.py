@@ -742,6 +742,12 @@ class Tela:
         for i, item_data in enumerate(self.dados_originais):
             if item_data[2] == sku_a_contar:
                 est_real_atual = item_data[7]
+                if self.modificador_var.get() < 0:
+                    messagebox.showwarning(
+                        'Valor inválido',
+                        'Número de produtos a serem adicionados na contagem não deve ser negativo.'
+                    )
+                    return
                 valor_a_somar = self.modificador_var.get()
 
                 try:
